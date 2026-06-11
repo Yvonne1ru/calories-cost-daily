@@ -1,0 +1,2889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>热量 & 成本计算器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #242433;
+    --border: #2e2e42;
+    --accent: #7c6af7;
+    --accent2: #56cfe1;
+    --accent3: #f77c6a;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --green: #5ecf8b;
+    --yellow: #f0c040;
+    --red: #f76a6a;
+    --radius: 12px;
+    --gap: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 14px;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 18px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .topbar h1 {
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+  }
+  .date-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .date-wrap label { color: var(--text2); font-size: 13px; }
+  #datePicker {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 5px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+  }
+  #datePicker:focus { border-color: var(--accent); }
+
+  /* ── Main 3-col layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 340px 1fr 260px;
+    gap: var(--gap);
+    padding: var(--gap);
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .col-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  /* ── LEFT col ── */
+  .left-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; overflow-y: auto; flex: 1; }
+
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 8px 12px 8px 34px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 14px; }
+
+  #suggestions {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+    margin-top: 4px;
+  }
+  #suggestions.show { display: block; }
+  .suggestion-item {
+    padding: 7px 12px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:hover { background: var(--surface); }
+  .suggestion-item .food-name { font-size: 13px; }
+  .suggestion-item .food-meta { color: var(--text2); font-size: 11px; white-space: nowrap; }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .input-group { display: flex; flex-direction: column; gap: 4px; }
+  .input-group label { font-size: 11px; color: var(--text2); }
+  .input-group input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input:focus { border-color: var(--accent); }
+
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: 4px 9px; font-size: 11px; border-radius: 6px; }
+
+  .divider { border: none; border-top: 1px solid var(--border); }
+
+  /* custom food form */
+  .custom-toggle {
+    color: var(--accent2);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+  .custom-toggle:hover { opacity: 0.8; }
+  #customForm {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+  }
+  #customForm.show { display: flex; }
+  .custom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* ── MIDDLE col ── */
+  .mid-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* summary cards */
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    padding: 12px 14px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .card {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .card .card-label { font-size: 11px; color: var(--text2); }
+  .card .card-value { font-size: 20px; font-weight: 700; line-height: 1; }
+  .card .card-unit { font-size: 11px; color: var(--text2); }
+  .c-cal { color: var(--accent); }
+  .c-pro { color: var(--accent2); }
+  .c-fat { color: var(--yellow); }
+  .c-carb { color: var(--green); }
+  .c-cost { color: var(--accent3); }
+
+  /* macro bar */
+  .macro-bar-wrap {
+    padding: 10px 14px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .macro-bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .macro-bar-row:last-child { margin-bottom: 0; }
+  .macro-label { width: 56px; font-size: 11px; color: var(--text2); }
+  .macro-track { flex: 1; height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .macro-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .macro-pct { width: 34px; font-size: 11px; color: var(--text2); text-align: right; }
+
+  /* food log table */
+  .log-wrap { flex: 1; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    padding: 9px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    z-index: 1;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 8px 10px; font-size: 13px; vertical-align: middle; }
+  .td-food { font-weight: 500; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .td-num { color: var(--text2); text-align: right; }
+  .td-cal { color: var(--accent); font-weight: 600; text-align: right; }
+  .td-cost { color: var(--accent3); font-weight: 600; text-align: right; }
+
+  /* ── RIGHT col ── */
+  .right-body { display: flex; flex-direction: column; flex: 1; overflow-y: auto; overflow-x: hidden; gap: 12px; padding: 14px; }
+
+  .img-upload-area {
+    flex-shrink: 0;
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    overflow: hidden;
+    position: relative;
+    min-height: 160px;
+    max-height: 220px;
+  }
+  .img-upload-area:hover { border-color: var(--accent); background: rgba(124,106,247,0.04); }
+  .img-upload-area.has-img { border-style: solid; border-color: var(--border); padding: 0; }
+  .img-upload-area img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+  }
+  .img-upload-area .upload-hint { color: var(--text2); font-size: 12px; text-align: center; pointer-events: none; }
+  .img-upload-area .upload-icon { font-size: 28px; pointer-events: none; }
+  #imgInput { display: none; }
+  .img-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+  /* ── Gallery / Calendar ── */
+  .gallery-section { flex-shrink: 0; }
+  .gallery-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .gallery-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .gallery-month-nav { display: flex; align-items: center; gap: 6px; }
+  .gallery-month-nav button {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+    border-radius: 6px; width: 24px; height: 24px; cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .gallery-month-nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .gallery-month-label { font-size: 12px; color: var(--text2); min-width: 56px; text-align: center; }
+
+  .cal-dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    margin-bottom: 3px;
+  }
+  .cal-dow {
+    text-align: center; font-size: 10px; color: var(--text2);
+    padding: 2px 0; font-weight: 600;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+  }
+  .cal-cell {
+    min-width: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    transition: border-color 0.15s;
+    box-sizing: border-box;
+  }
+  .cal-cell:hover { border-color: var(--accent); }
+  .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+  .cal-cell.today { border-color: var(--accent); }
+  .cal-cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cal-cell-date {
+    position: absolute; bottom: 2px; right: 3px;
+    font-size: 9px; color: var(--text2); line-height: 1;
+  }
+  .cal-cell.has-img .cal-cell-date { color: rgba(255,255,255,0.85); text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .cal-cell.no-img .cal-cell-date { color: var(--text2); }
+  .cal-cell.today .cal-cell-date { color: var(--accent); font-weight: 700; }
+
+  .gallery-export-btn {
+    width: 100%; margin-top: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 8px; color: #fff;
+    font-size: 12px; font-weight: 600; padding: 8px;
+    cursor: pointer; transition: opacity 0.2s;
+  }
+  .gallery-export-btn:hover { opacity: 0.85; }
+
+  /* ── Day Detail Modal ── */
+  .day-modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    z-index: 1100; align-items: center; justify-content: center;
+  }
+  .day-modal-backdrop.show { display: flex; }
+  .day-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; width: min(480px, 95vw); max-height: 85vh;
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  .day-modal-img { width: 100%; max-height: 260px; object-fit: cover; border-radius: 14px 14px 0 0; display: block; }
+  .day-modal-img-placeholder {
+    height: 100px; display: flex; align-items: center; justify-content: center;
+    font-size: 32px; background: var(--surface2);
+    border-radius: 14px 14px 0 0;
+  }
+  .day-modal-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .day-modal-date { font-size: 15px; font-weight: 700; color: var(--text); }
+  .day-modal-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .day-stat-card {
+    background: var(--surface2); border-radius: 8px; padding: 8px 10px; text-align: center;
+  }
+  .day-stat-label { font-size: 10px; color: var(--text2); }
+  .day-stat-val { font-size: 16px; font-weight: 700; color: var(--accent); }
+  .day-stat-unit { font-size: 9px; color: var(--text2); }
+  .day-modal-log { font-size: 11px; color: var(--text2); }
+  .day-modal-log-row {
+    display: flex; justify-content: space-between; padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .day-modal-log-row:last-child { border-bottom: none; }
+  .day-modal-actions { display: flex; gap: 8px; padding: 0 16px 16px; }
+  .day-modal-close-btn {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 8px; cursor: pointer; font-size: 13px;
+  }
+  .day-modal-poster-btn {
+    flex: 1; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; color: #fff; border-radius: 8px; padding: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 600;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* empty state */
+  .empty { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 13px; }
+  .empty .empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+  /* toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    z-index: 999;
+    max-width: 280px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* loss draft list */
+  #lossDraftList { display: flex; flex-direction: column; gap: 4px; }
+  .loss-draft-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(240,192,64,0.07);
+    border: 1px solid rgba(240,192,64,0.2);
+    border-radius: 7px;
+    padding: 5px 8px 5px 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .loss-draft-item:hover { background: rgba(240,192,64,0.14); }
+  .loss-draft-name { font-size: 12px; font-weight: 600; color: var(--yellow); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loss-draft-hint { font-size: 10px; color: var(--text2); white-space: nowrap; }
+  .loss-draft-del  { border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+  .loss-draft-del:hover { color: var(--red); }
+
+  /* loss modal food candidates */
+  #lmCandidates {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+  #lmCandidates.show { display: flex; }
+  .lm-candidate-item {
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text);
+    transition: background 0.12s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .lm-candidate-item:hover { background: rgba(240,192,64,0.15); }
+  .lm-candidate-name { font-weight: 600; }
+  .lm-candidate-meta { font-size: 11px; color: var(--text2); white-space: nowrap; }
+
+
+  .food-preview {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text2);
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .food-preview.show { display: flex; }
+  .food-preview .fp-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .food-preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+  .fp-item { display: flex; justify-content: space-between; }
+  .fp-val { color: var(--text); font-weight: 500; }
+
+  /* ── Quick-add modal ── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 900;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-backdrop.show { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 360px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transform: translateY(12px) scale(0.97);
+    transition: transform 0.2s;
+  }
+  .modal-backdrop.show .modal { transform: translateY(0) scale(1); }
+
+  .modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-food-name {
+    font-size: 13px;
+    color: var(--accent2);
+    background: rgba(86,207,225,0.08);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-weight: 600;
+    word-break: break-all;
+  }
+  .modal-hint {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: -8px;
+  }
+  .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions .btn { flex: 1; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+  /* ── Voice input ── */
+  .mode-toggle {
+    display: flex;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+  .mode-btn {
+    flex: 1;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text2);
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-btn.active { background: var(--accent); color: #fff; }
+
+  .voice-panel { display: flex; flex-direction: column; gap: 12px; }
+  .manual-panel { display: flex; flex-direction: column; gap: 12px; }
+
+  .record-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 26px;
+    cursor: pointer;
+    align-self: center;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 0 rgba(247,108,106,0);
+  }
+  .record-btn:hover { background: var(--surface); }
+  .record-btn.recording {
+    background: var(--red);
+    color: #fff;
+    animation: pulse-ring 1.2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(247,108,106,0.5); }
+    70%  { box-shadow: 0 0 0 14px rgba(247,108,106,0); }
+    100% { box-shadow: 0 0 0 0 rgba(247,108,106,0); }
+  }
+  .record-label { text-align: center; font-size: 12px; color: var(--text2); }
+
+  .voice-transcript {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--text);
+    min-height: 56px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .voice-transcript.placeholder { color: var(--text2); font-style: italic; }
+
+  .voice-parsed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .parsed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-size: 13px;
+    gap: 8px;
+  }
+  .parsed-item .pi-name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .parsed-item .pi-grams { color: var(--text2); white-space: nowrap; }
+  .parsed-item .pi-status { font-size: 11px; white-space: nowrap; }
+  .pi-matched { color: var(--green); }
+  .pi-unknown { color: var(--yellow); }
+  .parsed-item .pi-remove {
+    border: none; background: none; color: var(--text2);
+    cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+  }
+  .parsed-item .pi-remove:hover { color: var(--red); }
+
+  /* ── Voice waveform ── */
+  .waveform {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 36px;
+    padding: 0 8px;
+  }
+  .waveform.show { display: flex; }
+  .waveform-bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--red);
+    animation: wave-bounce 0.8s ease-in-out infinite;
+    min-height: 4px;
+  }
+  .waveform-bar:nth-child(1) { animation-delay: 0.0s; }
+  .waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+  .waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+  .waveform-bar:nth-child(4) { animation-delay: 0.15s; }
+  .waveform-bar:nth-child(5) { animation-delay: 0.05s; }
+  .waveform-bar:nth-child(6) { animation-delay: 0.25s; }
+  .waveform-bar:nth-child(7) { animation-delay: 0.1s; }
+  .waveform-bar:nth-child(8) { animation-delay: 0.2s; }
+  @keyframes wave-bounce {
+    0%, 100% { height: 4px;  opacity: 0.5; }
+    50%       { height: 28px; opacity: 1;   }
+  }
+
+  /* ── Responsive ── */
+  /* Mobile nav toggle */
+  .mobile-nav {
+    display: none;
+    gap: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  .mobile-nav-btn {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    padding: 8px 4px;
+    font-size: 11px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .mobile-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  @media (max-width: 768px) {
+    body { overflow: auto; }
+
+    .topbar { padding: 8px 12px; gap: 8px; }
+    .topbar h1 { font-size: 14px; }
+    .date-wrap label { display: none; }
+
+    .main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      gap: 0;
+      padding: 0;
+      overflow: visible;
+      flex: none;
+    }
+
+    .col {
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      display: none;
+    }
+    .col.mobile-active { display: flex; min-height: calc(100vh - 100px); }
+
+    .mobile-nav { display: flex; }
+
+    /* summary cards: 3 cols on mobile */
+    .summary-cards { grid-template-columns: repeat(3, 1fr); }
+
+    /* make log table scrollable horizontally */
+    .log-wrap { overflow-x: auto; }
+    table { min-width: 400px; }
+
+    /* right col gallery fits in one col */
+    .cal-grid { gap: 2px; }
+
+    /* modals full-screen on mobile */
+    .modal { width: 100% !important; max-width: 100% !important; border-radius: 16px 16px 0 0; margin-top: auto; }
+    .modal-backdrop { align-items: flex-end; }
+  }
+
+  @media (max-width: 480px) {
+    .summary-cards { grid-template-columns: repeat(2, 1fr); }
+    .topbar h1 { font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <h1>🔥 热量 & 成本计算器</h1>
+  <div class="date-wrap">
+    <label>📅 日期</label>
+    <input type="date" id="datePicker">
+  </div>
+</div>
+
+<!-- MOBILE NAV TABS -->
+<div class="mobile-nav">
+  <button class="mobile-nav-btn active" data-col="0">⌨️ 添加食物</button>
+  <button class="mobile-nav-btn" data-col="1">📊 今日统计</button>
+  <button class="mobile-nav-btn" data-col="2">🖼 图片&图表</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT: 输入区 -->
+  <div class="col mobile-active" id="colLeft">
+    <div class="col-header">添加食物</div>
+    <div class="left-body">
+
+      <!-- Mode toggle -->
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modeManual">⌨️ 手动输入</button>
+        <button class="mode-btn" id="modeVoice">🎙 语音输入</button>
+      </div>
+
+      <!-- MANUAL PANEL -->
+      <div class="manual-panel" id="manualPanel">
+        <!-- Search -->
+        <div class="search-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="搜索食物名称…" autocomplete="off">
+        </div>
+        <div id="suggestions"></div>
+
+        <!-- Selected food preview -->
+        <div class="food-preview" id="foodPreview">
+          <div class="fp-name" id="fpName">—</div>
+          <div class="food-preview-grid">
+            <div class="fp-item"><span>热量</span><span class="fp-val" id="fpCal">—</span></div>
+            <div class="fp-item"><span>蛋白质</span><span class="fp-val" id="fpPro">—</span></div>
+            <div class="fp-item"><span>脂肪</span><span class="fp-val" id="fpFat">—</span></div>
+            <div class="fp-item"><span>碳水</span><span class="fp-val" id="fpCarb">—</span></div>
+          </div>
+          <div class="fp-item"><span>每100g参考成本</span><span class="fp-val" id="fpCost">—</span></div>
+        </div>
+
+        <!-- Grams & cost -->
+        <div class="input-row">
+          <div class="input-group">
+            <label>克数 (g)</label>
+            <input type="number" id="gramsInput" placeholder="100" min="1" max="9999">
+          </div>
+          <div class="input-group">
+            <label>实际成本 (元, 可选)</label>
+            <input type="number" id="costInput" placeholder="自动计算" step="0.01" min="0">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="addBtn">＋ 添加到今日记录</button>
+      </div>
+
+      <!-- VOICE PANEL -->
+      <div class="voice-panel" id="voicePanel" style="display:none">
+        <button class="record-btn" id="recordBtn" title="按住录音">🎙</button>
+        <div class="waveform" id="waveform">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+        </div>
+        <div class="record-label" id="recordLabel">点击开始录音</div>
+        <div class="voice-transcript placeholder" id="voiceTranscript">识别结果将显示在这里…</div>
+        <div class="voice-parsed" id="voiceParsed"></div>
+        <button class="btn btn-primary" id="voiceAddBtn" style="display:none">✅ 批量添加到今日记录</button>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Custom food -->
+      <button class="custom-toggle" id="customToggle">
+        <span>＋</span> 添加自定义食物
+      </button>
+      <!-- Loss ratio calculator -->
+      <button class="custom-toggle" id="lossCalcToggle" style="margin-top:4px;color:var(--yellow)">
+        <span>⚖️</span> 损耗比例计算
+      </button>
+      <div id="lossDraftList"></div>
+      <div id="customForm">
+        <div class="input-group">
+          <label>食物名称 *</label>
+          <input type="text" id="cfName" placeholder="例：自制燕麦饼">
+        </div>
+        <div class="custom-grid">
+          <div class="input-group">
+            <label>热量 (kcal/100g) *</label>
+            <input type="number" id="cfCal" placeholder="0" min="0">
+          </div>
+          <div class="input-group">
+            <label>蛋白质 (g/100g)</label>
+            <input type="number" id="cfPro" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>脂肪 (g/100g)</label>
+            <input type="number" id="cfFat" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>碳水 (g/100g)</label>
+            <input type="number" id="cfCarb" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>成本 (元/100g)</label>
+            <input type="number" id="cfCost" placeholder="0" min="0" step="0.01">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="saveCustomBtn">保存自定义食物</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MIDDLE: 统计区 -->
+  <div class="col" id="colMid">
+    <div class="col-header" id="midHeader">今日统计</div>
+    <div class="mid-body">
+
+      <!-- Summary cards -->
+      <div class="summary-cards">
+        <div class="card">
+          <div class="card-label">总热量</div>
+          <div class="card-value c-cal" id="sumCal">0</div>
+          <div class="card-unit">kcal</div>
+        </div>
+        <div class="card">
+          <div class="card-label">蛋白质</div>
+          <div class="card-value c-pro" id="sumPro">0</div>
+          <div class="card-unit">g</div>
+        </div>
+        <div class="card">
+          <div class="card-label">脂肪</div>
+          <div class="card-value c-fat" id="sumFat">0</div>
+          <div class="card-unit">g</div>
+        </div>
+        <div class="card">
+          <div class="card-label">碳水</div>
+          <div class="card-value c-carb" id="sumCarb">0</div>
+          <div class="card-unit">g</div>
+        </div>
+        <div class="card">
+          <div class="card-label">总成本</div>
+          <div class="card-value c-cost" id="sumCost">0</div>
+          <div class="card-unit">元</div>
+        </div>
+        <div class="card">
+          <div class="card-label">食物种类</div>
+          <div class="card-value" id="sumKinds">0</div>
+          <div class="card-unit">种</div>
+        </div>
+      </div>
+
+      <!-- Macro ratio bar -->
+      <div class="macro-bar-wrap">
+        <div class="macro-bar-row">
+          <div class="macro-label">蛋白质</div>
+          <div class="macro-track"><div class="macro-fill" id="barPro" style="width:0%;background:var(--accent2)"></div></div>
+          <div class="macro-pct" id="pctPro">0%</div>
+        </div>
+        <div class="macro-bar-row">
+          <div class="macro-label">脂肪</div>
+          <div class="macro-track"><div class="macro-fill" id="barFat" style="width:0%;background:var(--yellow)"></div></div>
+          <div class="macro-pct" id="pctFat">0%</div>
+        </div>
+        <div class="macro-bar-row">
+          <div class="macro-label">碳水</div>
+          <div class="macro-track"><div class="macro-fill" id="barCarb" style="width:0%;background:var(--green)"></div></div>
+          <div class="macro-pct" id="pctCarb">0%</div>
+        </div>
+      </div>
+
+      <!-- Log table -->
+      <div class="log-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>食物</th>
+              <th style="text-align:right">克数</th>
+              <th style="text-align:right">热量</th>
+              <th style="text-align:right">蛋白</th>
+              <th style="text-align:right">脂肪</th>
+              <th style="text-align:right">碳水</th>
+              <th style="text-align:right">成本</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState">
+          <div class="empty-icon">🥗</div>
+          <div>还没有记录，添加今日的第一餐吧</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- RIGHT: 图片区 -->
+  <div class="col" id="colRight">
+    <div class="col-header">每日图片</div>
+    <div class="right-body">
+      <div class="img-upload-area" id="imgUploadArea">
+        <div class="upload-icon">📷</div>
+        <div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>
+      </div>
+      <input type="file" id="imgInput" accept="image/*" capture="environment">
+      <div class="img-actions">
+        <button class="btn btn-ghost btn-sm" style="flex:1" id="uploadBtn">📸 拍照上传</button>
+        <button class="btn btn-danger btn-sm" id="clearImgBtn">删除</button>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);flex-shrink:0">
+        <div style="font-weight:600;color:var(--text);margin-bottom:6px">📝 备注</div>
+        <textarea id="noteInput"
+          placeholder="今日饮食备注、心情或感受…"
+          style="width:100%;background:transparent;border:none;color:var(--text);font-size:12px;resize:none;outline:none;min-height:60px;font-family:inherit;line-height:1.6"
+        ></textarea>
+      </div>
+
+      <!-- Gallery -->
+      <div class="gallery-section">
+        <div class="gallery-header">
+          <span class="gallery-title">每日一图展示柜</span>
+          <div class="gallery-month-nav">
+            <button id="galPrevMonth">‹</button>
+            <span class="gallery-month-label" id="galMonthLabel"></span>
+            <button id="galNextMonth">›</button>
+          </div>
+        </div>
+        <div class="cal-dow-row">
+          <div class="cal-dow">日</div><div class="cal-dow">一</div><div class="cal-dow">二</div>
+          <div class="cal-dow">三</div><div class="cal-dow">四</div><div class="cal-dow">五</div><div class="cal-dow">六</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <button class="gallery-export-btn" id="exportPosterBtn">✨ 导出本月海报</button>
+      </div>
+
+      <!-- Data Management -->
+      <div class="gallery-section" style="margin-top:4px">
+        <div class="gallery-header" style="margin-bottom:8px">
+          <span class="gallery-title">📦 数据管理</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <button class="btn btn-ghost btn-sm" id="exportCsvBtn" style="text-align:center">⬇️ 导出 CSV</button>
+            <button class="btn btn-ghost btn-sm" id="importCsvBtn" style="text-align:center">⬆️ 导入 CSV</button>
+          </div>
+          <input type="file" id="importCsvInput" accept=".csv" style="display:none">
+          <button class="btn btn-sm" id="clearDataBtn" style="background:rgba(247,106,106,0.12);color:var(--red);border:1px solid rgba(247,106,106,0.3)">🗑 清除数据…</button>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="gallery-section" style="margin-top:4px" id="chartSection">
+        <div class="gallery-header" style="margin-bottom:8px">
+          <span class="gallery-title">📈 趋势图表</span>
+          <button class="btn btn-ghost btn-sm" id="chartToggle">展开</button>
+        </div>
+        <div id="chartPanel" style="display:none">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="chartRange" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:11px;outline:none;cursor:pointer">
+              <option value="7">近 7 天</option>
+              <option value="14">近 14 天</option>
+              <option value="30" selected>近 30 天</option>
+              <option value="90">近 3 月</option>
+              <option value="0">全部</option>
+            </select>
+          </div>
+          <canvas id="trendChart" style="width:100%;border-radius:8px;display:block"></canvas>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:6px;font-size:10px;color:var(--text2)">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block;border-radius:2px"></span>热量 kcal</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent3);display:inline-block;border-radius:2px"></span>成本 元</span>
+          </div>
+        </div>
+      </div>
+
+</div>
+
+<div id="toast"></div>
+
+<!-- CLEAR DATA MODAL -->
+<div class="modal-backdrop" id="clearModal">
+  <div class="modal" style="max-width:380px;width:95%">
+    <div class="modal-title" style="color:var(--red)">🗑 清除数据</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn" id="clearDayBtn" style="background:rgba(247,106,106,0.1);color:var(--red);border:1px solid rgba(247,106,106,0.3);text-align:left;padding:12px 14px">
+        <div style="font-weight:600;font-size:13px">清除当前日期</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px" id="clearDayLabel">仅删除该日的所有饮食记录</div>
+      </button>
+      <button class="btn" id="clearAllBtn" style="background:rgba(247,106,106,0.1);color:var(--red);border:1px solid rgba(247,106,106,0.3);text-align:left;padding:12px 14px">
+        <div style="font-weight:600;font-size:13px">清除全部历史数据</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">删除所有日期的饮食记录、图片和备注</div>
+      </button>
+    </div>
+    <button class="btn btn-ghost" id="clearModalCancel" style="width:100%">取消</button>
+  </div>
+</div>
+
+<!-- CLEAR CONFIRM MODAL -->
+<div class="modal-backdrop" id="clearConfirmModal">
+  <div class="modal" style="max-width:360px;width:95%">
+    <div class="modal-title" style="color:var(--red)">⚠️ 二次确认</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6" id="clearConfirmText"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" id="clearConfirmCancel" style="flex:1">取消</button>
+      <button class="btn btn-danger" id="clearConfirmOk" style="flex:1">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- DAY DETAIL MODAL -->
+<div class="day-modal-backdrop" id="dayModal">
+  <div class="day-modal">
+    <div id="dayModalImgWrap"></div>
+    <div class="day-modal-body">
+      <div class="day-modal-date" id="dayModalDate"></div>
+      <div class="day-modal-stats" id="dayModalStats"></div>
+      <div class="day-modal-log" id="dayModalLog"></div>
+    </div>
+    <div class="day-modal-actions">
+      <button class="day-modal-close-btn" id="dayModalClose">关闭</button>
+      <button class="day-modal-poster-btn" id="dayModalPoster">🎨 生成海报</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOSS RATIO CALC MODAL -->
+<div class="modal-backdrop" id="lossModal">
+  <div class="modal" style="max-width:480px;width:95%">
+    <div class="modal-title">⚖️ 损耗比例计算</div>
+
+    <!-- Food name + auto-fill -->
+    <div class="input-group" style="margin-bottom:10px">
+      <label>食物名称 *</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="lmFoodName" placeholder="例：鸡胸肉" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none">
+        <button class="btn btn-ghost btn-sm" id="lmAutoFill" style="white-space:nowrap">自动填充营养</button>
+      </div>
+      <div id="lmCandidates"></div>
+    </div>
+
+    <!-- 4 measurement fields -->
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;letter-spacing:.04em">📏 称重数据（可分批填写）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="input-group">
+          <label>加热前生重 (g)</label>
+          <input type="number" id="lmRawWeight" placeholder="例：200" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>加热后连盘子重 (g)</label>
+          <input type="number" id="lmCookedWithPlate" placeholder="例：280" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>盘子净重 (g)</label>
+          <input type="number" id="lmPlateWeight" placeholder="例：120" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>吃完连盘子重 (g)</label>
+          <input type="number" id="lmAfterEatWithPlate" placeholder="例：130" min="0" step="0.1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Nutrition per 100g -->
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;letter-spacing:.04em">🔬 每百克营养数据</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="input-group">
+          <label>热量 (kcal)</label>
+          <input type="number" id="lmCal100" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>蛋白质 (g)</label>
+          <input type="number" id="lmPro100" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>脂肪 (g)</label>
+          <input type="number" id="lmFat100" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>碳水 (g)</label>
+          <input type="number" id="lmCarb100" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="input-group">
+          <label>价格 (元/100g)</label>
+          <input type="number" id="lmCost100" placeholder="0" min="0" step="0.01">
+        </div>
+      </div>
+    </div>
+
+    <!-- Realtime result -->
+    <div id="lmResultBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;letter-spacing:.04em">✅ 实时计算结果</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px" id="lmResultGrid"></div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" id="lmCancel" style="flex:1">取消</button>
+      <button class="btn" id="lmSave" style="flex:1;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">💾 保存（未完成）</button>
+      <button class="btn btn-primary" id="lmAdd" style="flex:1.5">＋ 添加到今日记录</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK-ADD MODAL -->
+<div class="modal-backdrop" id="quickModal">
+  <div class="modal">
+    <div class="modal-title">⚡ 快速添加</div>
+    <div class="modal-food-name" id="qmFoodName"></div>
+    <div class="modal-hint">未在数据库中找到，填写后将自动缓存供下次使用</div>
+    <div class="modal-grid">
+      <div class="input-group">
+        <label>热量 (kcal/100g) *</label>
+        <input type="number" id="qmCal" placeholder="例：250" min="0">
+      </div>
+      <div class="input-group">
+        <label>成本 (元/100g)</label>
+        <input type="number" id="qmCost" placeholder="可选" step="0.01" min="0">
+      </div>
+      <div class="input-group">
+        <label>蛋白质 (g/100g)</label>
+        <input type="number" id="qmPro" placeholder="可选" min="0" step="0.1">
+      </div>
+      <div class="input-group">
+        <label>脂肪 (g/100g)</label>
+        <input type="number" id="qmFat" placeholder="可选" min="0" step="0.1">
+      </div>
+      <div class="input-group">
+        <label>碳水 (g/100g)</label>
+        <input type="number" id="qmCarb" placeholder="可选" min="0" step="0.1">
+      </div>
+      <div class="input-group">
+        <label>本次克数 *</label>
+        <input type="number" id="qmGrams" placeholder="例：150" min="1">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="qmCancel">取消</button>
+      <button class="btn btn-primary" id="qmConfirm">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  JS DATA LAYER — state, storage helpers, food database       ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── State ──────────────────────────────────────────────────────
+let allFoods = [];       // loaded from CSV + custom
+let csvFoods = [];       // from CSV only
+let customFoods = [];    // from localStorage
+let currentDate = '';
+let selectedFood = null;
+
+const STORAGE_LOGS    = 'diet_logs';
+const STORAGE_CUSTOM  = 'diet_custom_foods';
+const STORAGE_IMAGES  = 'diet_images';
+const STORAGE_NOTES   = 'diet_notes';
+
+// ── Utils ──────────────────────────────────────────────────────
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function toast(msg, ms = 2400) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function num(v, d = 1) {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : parseFloat(n.toFixed(d));
+}
+
+// ── Aggregate helpers (shared across renderSummary / openDayModal / generatePoster) ──
+function aggregateLogs(logs) {
+  const tot = { cal:0, pro:0, fat:0, carb:0, cost:0 };
+  logs.forEach(e => { tot.cal+=e.cal; tot.pro+=e.pro; tot.fat+=e.fat; tot.carb+=e.carb; tot.cost+=e.cost; });
+  return tot;
+}
+
+function calcMacroRatios(pro, fat, carb) {
+  const p = pro*4, f = fat*9, c = carb*4, total = p+f+c || 1;
+  return { pPro: p/total*100, pFat: f/total*100, pCarb: c/total*100 };
+}
+
+function lossCalcFromValues(v) {
+  const cookedNet   = (v.cookedWithPlate !== null && v.plateWeight !== null) ? v.cookedWithPlate - v.plateWeight : null;
+  const actualEaten = (v.cookedWithPlate !== null && v.afterEatWithPlate !== null) ? v.cookedWithPlate - v.afterEatWithPlate : null;
+  const lossRatio   = (cookedNet !== null && v.rawWeight !== null && v.rawWeight > 0) ? cookedNet / v.rawWeight : null;
+  const calcWeight  = (actualEaten !== null && lossRatio !== null && lossRatio > 0) ? actualEaten / lossRatio : null;
+  return { cookedNet, actualEaten, lossRatio, calcWeight };
+}
+
+// ── localStorage helpers ──────────────────────────────────────
+function getLogs(date) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+  return all[date] || [];
+}
+function saveLogs(date, logs) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+  all[date] = logs;
+  localStorage.setItem(STORAGE_LOGS, JSON.stringify(all));
+}
+function getImage(date) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_IMAGES) || '{}');
+  return all[date] || null;
+}
+function saveImage(date, b64) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_IMAGES) || '{}');
+  if (b64) all[date] = b64; else delete all[date];
+  localStorage.setItem(STORAGE_IMAGES, JSON.stringify(all));
+}
+function getNote(date) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_NOTES) || '{}');
+  return all[date] || '';
+}
+function saveNote(date, note) {
+  const all = JSON.parse(localStorage.getItem(STORAGE_NOTES) || '{}');
+  if (note) all[date] = note; else delete all[date];
+  localStorage.setItem(STORAGE_NOTES, JSON.stringify(all));
+}
+function loadCustomFoods() {
+  customFoods = JSON.parse(localStorage.getItem(STORAGE_CUSTOM) || '[]');
+}
+function saveCustomFoods() {
+  localStorage.setItem(STORAGE_CUSTOM, JSON.stringify(customFoods));
+}
+
+// ── CSV Load ──────────────────────────────────────────────────
+function loadCSV() {
+  Papa.parse('assets/food_nutrition_data_all.csv', {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    complete(results) {
+      csvFoods = results.data.map(r => ({
+        name:   (r['食物名称'] || '').trim(),
+        cal:    num(r['热量']),
+        pro:    num(r['蛋白质']),
+        fat:    num(r['脂肪']),
+        carb:   num(r['碳水化合物']),
+        cost:   num(r['成本']),
+        cat:    (r['Category'] || '').trim(),
+        source: 'csv',
+      })).filter(f => f.name);
+      rebuildFoods();
+    },
+    error() { toast('CSV 加载失败，请检查文件路径'); }
+  });
+}
+
+function rebuildFoods() {
+  allFoods = [...customFoods.map(f => ({...f, source:'custom'})), ...csvFoods];
+}
+
+// ── Search / suggestions ──────────────────────────────────────
+const searchInput   = document.getElementById('searchInput');
+const suggestionsEl = document.getElementById('suggestions');
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.trim();
+  if (!q) { hideSuggestions(); return; }
+  const matches = allFoods.filter(f => f.name.includes(q)).slice(0, 30);
+  renderSuggestions(matches, q);
+});
+
+searchInput.addEventListener('keydown', e => {
+  const items = suggestionsEl.querySelectorAll('.suggestion-item');
+  let idx = [...items].findIndex(el => el.classList.contains('active'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    items[Math.min(idx+1, items.length-1)]?.classList.add('active');
+    if (idx >= 0) items[idx].classList.remove('active');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    items[Math.max(idx-1, 0)]?.classList.add('active');
+    if (idx >= 0) items[idx].classList.remove('active');
+  } else if (e.key === 'Enter') {
+    const active = suggestionsEl.querySelector('.suggestion-item.active');
+    if (active) {
+      active.click();
+    } else {
+      // no suggestion selected — try exact match or open quick-add modal
+      const q = searchInput.value.trim();
+      if (!q) return;
+      const exact = allFoods.find(f => f.name === q);
+      if (exact) {
+        selectFood(exact.name);
+      } else {
+        openQuickModal(q);
+      }
+    }
+  } else if (e.key === 'Escape') {
+    hideSuggestions();
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap') && !e.target.closest('#suggestions')) hideSuggestions();
+});
+
+function renderSuggestions(foods, q) {
+  if (!foods.length) {
+    // show a "not found" row that opens the quick-add modal
+    suggestionsEl.innerHTML = `<div class="suggestion-item" id="noMatchRow" style="color:var(--text2)">
+      <span class="food-name">「${q}」未找到</span>
+      <span class="food-meta" style="color:var(--accent2)">点击手动添加 →</span>
+    </div>`;
+    suggestionsEl.classList.add('show');
+    document.getElementById('noMatchRow').addEventListener('click', () => {
+      hideSuggestions();
+      openQuickModal(q);
+    });
+    return;
+  }
+  suggestionsEl.innerHTML = foods.map(f => {
+    const costStr = f.cost ? `¥${f.cost}/100g` : '';
+    const srcBadge = f.source === 'custom' ? '<span style="color:var(--accent2);font-size:10px">自定义</span>' : '';
+    return `<div class="suggestion-item" data-name="${f.name}">
+      <span class="food-name">${highlight(f.name, q)} ${srcBadge}</span>
+      <span class="food-meta">${f.cal} kcal&nbsp;&nbsp;${costStr}</span>
+    </div>`;
+  }).join('');
+  suggestionsEl.classList.add('show');
+  suggestionsEl.querySelectorAll('.suggestion-item').forEach(el => {
+    el.addEventListener('click', () => selectFood(el.dataset.name));
+  });
+}
+
+function highlight(text, q) {
+  return text.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<strong style="color:var(--accent)">$1</strong>');
+}
+
+function hideSuggestions() {
+  suggestionsEl.classList.remove('show');
+  suggestionsEl.innerHTML = '';
+}
+
+function selectFood(name) {
+  selectedFood = allFoods.find(f => f.name === name);
+  if (!selectedFood) return;
+  searchInput.value = name;
+  hideSuggestions();
+
+  document.getElementById('fpName').textContent = name;
+  document.getElementById('fpCal').textContent  = `${selectedFood.cal} kcal`;
+  document.getElementById('fpPro').textContent  = `${selectedFood.pro} g`;
+  document.getElementById('fpFat').textContent  = `${selectedFood.fat} g`;
+  document.getElementById('fpCarb').textContent = `${selectedFood.carb} g`;
+  document.getElementById('fpCost').textContent = selectedFood.cost ? `¥${selectedFood.cost}` : '—';
+  document.getElementById('foodPreview').classList.add('show');
+
+  // auto-fill cost estimate
+  const grams = parseFloat(document.getElementById('gramsInput').value) || 100;
+  if (selectedFood.cost) {
+    document.getElementById('costInput').placeholder = `≈ ¥${num(selectedFood.cost * grams / 100, 2)}`;
+  } else {
+    document.getElementById('costInput').placeholder = '自动计算';
+  }
+  document.getElementById('gramsInput').focus();
+}
+
+document.getElementById('gramsInput').addEventListener('input', () => {
+  if (!selectedFood || !selectedFood.cost) return;
+  const g = parseFloat(document.getElementById('gramsInput').value) || 100;
+  document.getElementById('costInput').placeholder = `≈ ¥${num(selectedFood.cost * g / 100, 2)}`;
+});
+
+// ── Add entry ─────────────────────────────────────────────────
+document.getElementById('addBtn').addEventListener('click', () => {
+  if (!selectedFood) { toast('请先搜索并选择一种食物'); return; }
+  const grams = parseFloat(document.getElementById('gramsInput').value);
+  if (!grams || grams <= 0) { toast('请输入有效的克数'); return; }
+
+  const ratio = grams / 100;
+  const costOverride = parseFloat(document.getElementById('costInput').value);
+  const cost = isNaN(costOverride) ? num(selectedFood.cost * ratio, 2) : costOverride;
+
+  const entry = {
+    id:   Date.now(),
+    name: selectedFood.name,
+    g:    grams,
+    cal:  num(selectedFood.cal * ratio),
+    pro:  num(selectedFood.pro * ratio),
+    fat:  num(selectedFood.fat * ratio),
+    carb: num(selectedFood.carb * ratio),
+    cost,
+  };
+
+  const logs = getLogs(currentDate);
+  logs.push(entry);
+  saveLogs(currentDate, logs);
+  renderLog();
+
+  // reset
+  searchInput.value = '';
+  document.getElementById('gramsInput').value = '';
+  document.getElementById('costInput').value = '';
+  document.getElementById('costInput').placeholder = '自动计算';
+  document.getElementById('foodPreview').classList.remove('show');
+  selectedFood = null;
+  toast(`已添加：${entry.name} (${grams}g)`);
+});
+
+// ── Delete entry ──────────────────────────────────────────────
+function deleteEntry(id) {
+  const logs = getLogs(currentDate).filter(e => e.id !== id);
+  saveLogs(currentDate, logs);
+  renderLog();
+}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  JS UI LAYER — rendering, interactions, modals, export       ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── Render log ────────────────────────────────────────────────
+function renderLog() {
+  const logs = getLogs(currentDate);
+  const tbody = document.getElementById('logBody');
+  const empty = document.getElementById('emptyState');
+
+  if (!logs.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    renderSummary([]);
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = logs.map(e => `
+    <tr>
+      <td class="td-food" title="${e.name}">${e.name}</td>
+      <td class="td-num">${e.g}g</td>
+      <td class="td-cal">${e.cal}</td>
+      <td class="td-num">${e.pro}</td>
+      <td class="td-num">${e.fat}</td>
+      <td class="td-num">${e.carb}</td>
+      <td class="td-cost">${e.cost ? '¥'+e.cost : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteEntry(${e.id})">×</button></td>
+    </tr>
+  `).join('');
+  renderSummary(logs);
+}
+
+function renderSummary(logs) {
+  const tot = aggregateLogs(logs);
+
+  document.getElementById('sumCal').textContent  = Math.round(tot.cal);
+  document.getElementById('sumPro').textContent  = num(tot.pro);
+  document.getElementById('sumFat').textContent  = num(tot.fat);
+  document.getElementById('sumCarb').textContent = num(tot.carb);
+  document.getElementById('sumCost').textContent = num(tot.cost, 2);
+  document.getElementById('sumKinds').textContent = new Set(logs.map(e => e.name)).size;
+
+  const { pPro, pFat, pCarb } = calcMacroRatios(tot.pro, tot.fat, tot.carb);
+
+  document.getElementById('barPro').style.width  = pPro  + '%';
+  document.getElementById('barFat').style.width  = pFat  + '%';
+  document.getElementById('barCarb').style.width = pCarb + '%';
+  document.getElementById('pctPro').textContent  = Math.round(pPro)  + '%';
+  document.getElementById('pctFat').textContent  = Math.round(pFat)  + '%';
+  document.getElementById('pctCarb').textContent = Math.round(pCarb) + '%';
+}
+
+// ── Date picker ───────────────────────────────────────────────
+const datePicker = document.getElementById('datePicker');
+datePicker.value = today();
+currentDate = today();
+
+datePicker.addEventListener('change', () => {
+  currentDate = datePicker.value;
+  const label = currentDate === today() ? '今日统计' : `${currentDate} 统计`;
+  document.getElementById('midHeader').textContent = label;
+  renderLog();
+  loadDateImage();
+  loadDateNote();
+  // sync gallery to the selected month
+  const [y, m] = currentDate.split('-').map(Number);
+  galYear = y; galMonth = m - 1;
+  renderCalendar();
+});
+
+// ── Image upload ──────────────────────────────────────────────
+const imgUploadArea = document.getElementById('imgUploadArea');
+const imgInput      = document.getElementById('imgInput');
+
+function compressAndSave(file, date, onDone) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else       { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.82);
+      saveImage(date, b64);
+      if (onDone) onDone(b64);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+imgUploadArea.addEventListener('click', () => imgInput.click());
+document.getElementById('uploadBtn').addEventListener('click', () => imgInput.click());
+
+imgInput.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  compressAndSave(file, currentDate, b64 => {
+    renderImage(b64);
+    renderCalendar();
+    toast('图片已保存');
+  });
+  imgInput.value = '';
+});
+
+// drag & drop
+imgUploadArea.addEventListener('dragover', e => { e.preventDefault(); imgUploadArea.style.borderColor = 'var(--accent)'; });
+imgUploadArea.addEventListener('dragleave', () => { imgUploadArea.style.borderColor = ''; });
+imgUploadArea.addEventListener('drop', e => {
+  e.preventDefault();
+  imgUploadArea.style.borderColor = '';
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) { toast('请上传图片文件'); return; }
+  compressAndSave(file, currentDate, b64 => {
+    renderImage(b64);
+    renderCalendar();
+    toast('图片已保存');
+  });
+});
+
+document.getElementById('clearImgBtn').addEventListener('click', () => {
+  saveImage(currentDate, null);
+  renderImage(null);
+  renderCalendar();
+  toast('图片已删除');
+});
+
+function renderImage(b64) {
+  const area = document.getElementById('imgUploadArea');
+  if (b64) {
+    area.innerHTML = `<img src="${b64}" alt="今日饮食">`;
+    area.classList.add('has-img');
+  } else {
+    area.innerHTML = `<div class="upload-icon">📷</div><div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>`;
+    area.classList.remove('has-img');
+    area.onclick = () => imgInput.click();
+  }
+}
+
+function loadDateImage() {
+  renderImage(getImage(currentDate));
+}
+
+// ── Notes ─────────────────────────────────────────────────────
+const noteInput = document.getElementById('noteInput');
+noteInput.addEventListener('input', () => saveNote(currentDate, noteInput.value));
+
+function loadDateNote() {
+  noteInput.value = getNote(currentDate);
+}
+
+// ── Quick-add modal ──────────────────────────────────────────
+const quickModal = document.getElementById('quickModal');
+let qmPendingName = '';
+
+function openQuickModal(name) {
+  qmPendingName = name;
+  document.getElementById('qmFoodName').textContent = name;
+  ['qmCal','qmCost','qmPro','qmFat','qmCarb','qmGrams'].forEach(id => document.getElementById(id).value = '');
+  quickModal.classList.add('show');
+  setTimeout(() => document.getElementById('qmCal').focus(), 60);
+}
+
+function closeQuickModal() {
+  quickModal.classList.remove('show');
+  if (qmBatchMode) {
+    // user cancelled mid-batch — commit whatever is ready so far
+    qmBatchMode = false;
+    batchQueue  = [];
+    if (batchReady.length) commitBatch();
+  }
+}
+
+document.getElementById('qmCancel').addEventListener('click', closeQuickModal);
+quickModal.addEventListener('click', e => { if (e.target === quickModal) closeQuickModal(); });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && quickModal.classList.contains('show')) closeQuickModal();
+});
+
+document.getElementById('qmConfirm').addEventListener('click', () => {
+  const cal   = parseFloat(document.getElementById('qmCal').value);
+  const cost  = parseFloat(document.getElementById('qmCost').value);
+  const pro   = parseFloat(document.getElementById('qmPro').value);
+  const fat   = parseFloat(document.getElementById('qmFat').value);
+  const carb  = parseFloat(document.getElementById('qmCarb').value);
+  const grams = parseFloat(document.getElementById('qmGrams').value);
+
+  if (isNaN(cal) || cal < 0) { document.getElementById('qmCal').focus(); return; }
+  if (!grams || grams <= 0)  { document.getElementById('qmGrams').focus(); return; }
+
+  const ratio = grams / 100;
+  const entry = {
+    id:   Date.now() + Math.random(),
+    name: qmPendingName,
+    g:    grams,
+    cal:  num(cal * ratio),
+    pro:  isNaN(pro)  ? 0 : num(pro  * ratio),
+    fat:  isNaN(fat)  ? 0 : num(fat  * ratio),
+    carb: isNaN(carb) ? 0 : num(carb * ratio),
+    cost: isNaN(cost) ? 0 : num(cost * ratio, 2),
+  };
+
+  // cache — overwrite if name already exists
+  const existingIdx = customFoods.findIndex(f => f.name === qmPendingName);
+  const cacheEntry = {
+    name: qmPendingName,
+    cal:  num(cal),
+    pro:  isNaN(pro)  ? 0 : num(pro),
+    fat:  isNaN(fat)  ? 0 : num(fat),
+    carb: isNaN(carb) ? 0 : num(carb),
+    cost: isNaN(cost) ? 0 : num(cost, 2),
+  };
+  if (existingIdx >= 0) customFoods[existingIdx] = cacheEntry;
+  else customFoods.push(cacheEntry);
+  saveCustomFoods();
+  rebuildFoods();
+
+  closeQuickModal();
+
+  if (qmBatchMode) {
+    // accumulate and continue queue
+    batchReady.push(entry);
+    batchQueue.shift();
+    qmBatchMode = false;
+    processBatchQueue();
+  } else {
+    // single-add mode (manual input)
+    const logs = getLogs(currentDate);
+    logs.push(entry);
+    saveLogs(currentDate, logs);
+    renderLog();
+    searchInput.value = '';
+    toast(`已添加：${qmPendingName} (${grams}g)`);
+  }
+});
+
+function commitBatch() {
+  if (!batchReady.length) return;
+  const logs = getLogs(currentDate);
+  batchReady.forEach(e => { e.id = Date.now() + Math.random(); logs.push(e); });
+  saveLogs(currentDate, logs);
+  renderLog();
+  const names = batchReady.map(e => e.name).join('、');
+  toast(`已批量添加 ${batchReady.length} 项：${names}`);
+  batchReady = [];
+  voiceItems = [];
+  renderVoiceParsed();
+  const el = document.getElementById('voiceTranscript');
+  el.textContent = '识别结果将显示在这里…';
+  el.classList.add('placeholder');
+}
+
+// ── Mode toggle ──────────────────────────────────────────────
+document.getElementById('modeManual').addEventListener('click', () => setMode('manual'));
+document.getElementById('modeVoice').addEventListener('click',  () => setMode('voice'));
+
+function setMode(mode) {
+  const isVoice = mode === 'voice';
+  document.getElementById('modeManual').classList.toggle('active', !isVoice);
+  document.getElementById('modeVoice').classList.toggle('active',  isVoice);
+  document.getElementById('manualPanel').style.display = isVoice ? 'none' : 'flex';
+  document.getElementById('voicePanel').style.display  = isVoice ? 'flex' : 'none';
+  if (!isVoice) stopRecording();
+}
+
+// ── Voice input ───────────────────────────────────────────────
+let recognition = null;
+let isRecording = false;
+let voiceItems  = [];   // [{name, grams}]
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function initRecognition() {
+  if (!SpeechRecognition) return null;
+  const r = new SpeechRecognition();
+  r.lang = 'zh-CN';
+  r.continuous = false;
+  r.interimResults = true;
+
+  r.onresult = e => {
+    const transcript = [...e.results].map(r => r[0].transcript).join('');
+    const el = document.getElementById('voiceTranscript');
+    el.textContent = transcript;
+    el.classList.remove('placeholder');
+    if (e.results[e.results.length - 1].isFinal) {
+      parseVoiceTranscript(transcript);
+    }
+  };
+
+  r.onerror = e => {
+    setRecordingState(false);
+    if (e.error === 'not-allowed') toast('请允许麦克风权限后重试');
+    else if (e.error !== 'no-speech') toast('语音识别出错：' + e.error);
+  };
+
+  r.onend = () => setRecordingState(false);
+  return r;
+}
+
+function setRecordingState(on) {
+  isRecording = on;
+  const btn   = document.getElementById('recordBtn');
+  const label = document.getElementById('recordLabel');
+  const wave  = document.getElementById('waveform');
+  btn.classList.toggle('recording', on);
+  btn.textContent = on ? '⏹' : '🎙';
+  label.textContent = on ? '正在录音，点击停止…' : '点击开始录音';
+  if (wave) wave.classList.toggle('show', on);
+}
+
+document.getElementById('recordBtn').addEventListener('click', () => {
+  if (!SpeechRecognition) { toast('浏览器不支持 Web Speech API，请使用 Chrome'); return; }
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
+
+function startRecording() {
+  recognition = initRecognition();
+  if (!recognition) return;
+  voiceItems = [];
+  renderVoiceParsed();
+  const el = document.getElementById('voiceTranscript');
+  el.textContent = '识别结果将显示在这里…';
+  el.classList.add('placeholder');
+  setRecordingState(true);
+  recognition.start();
+}
+
+function stopRecording() {
+  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+  setRecordingState(false);
+}
+
+// ── Parse transcript ──────────────────────────────────────────
+function parseVoiceTranscript(text) {
+  // normalize: "两百" etc not handled — rely on speech-to-text giving digits
+  // strip commas/periods/spaces between items, support both 克 and g/G
+  const re = /([^\d，,。\s]+?)\s*(\d+(?:\.\d+)?)\s*(?:克|g|G)/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const name  = m[1].trim().replace(/^[，,。\s]+|[，,。\s]+$/g, '');
+    const grams = parseFloat(m[2]);
+    if (name && grams > 0) found.push({ name, grams });
+  }
+  if (!found.length) {
+    toast('未能解析出食物和克数，请重新录音');
+    return;
+  }
+  voiceItems = found;
+  renderVoiceParsed();
+}
+
+function renderVoiceParsed() {
+  const wrap = document.getElementById('voiceParsed');
+  const addBtn = document.getElementById('voiceAddBtn');
+  if (!voiceItems.length) { wrap.innerHTML = ''; addBtn.style.display = 'none'; return; }
+
+  wrap.innerHTML = voiceItems.map((item, i) => {
+    const matched = allFoods.find(f => f.name === item.name);
+    const statusHtml = matched
+      ? `<span class="pi-status pi-matched">✓ 已匹配</span>`
+      : `<span class="pi-status pi-unknown">? 待补充</span>`;
+    return `<div class="parsed-item" data-idx="${i}">
+      <span class="pi-name" title="${item.name}">${item.name}</span>
+      <span class="pi-grams">${item.grams}g</span>
+      ${statusHtml}
+      <button class="pi-remove" onclick="removeVoiceItem(${i})" title="移除">×</button>
+    </div>`;
+  }).join('');
+  addBtn.style.display = 'block';
+}
+
+function removeVoiceItem(idx) {
+  voiceItems.splice(idx, 1);
+  renderVoiceParsed();
+}
+
+// ── Batch add with modal queue ────────────────────────────────
+let batchQueue   = [];   // items needing quick-add modal
+let batchReady   = [];   // fully resolved entries ready to commit
+
+document.getElementById('voiceAddBtn').addEventListener('click', () => {
+  if (!voiceItems.length) return;
+  batchReady = [];
+  batchQueue = [];
+
+  voiceItems.forEach(item => {
+    const food = allFoods.find(f => f.name === item.name);
+    if (food) {
+      const ratio = item.grams / 100;
+      batchReady.push({
+        id:   Date.now() + Math.random(),
+        name: food.name,
+        g:    item.grams,
+        cal:  num(food.cal  * ratio),
+        pro:  num(food.pro  * ratio),
+        fat:  num(food.fat  * ratio),
+        carb: num(food.carb * ratio),
+        cost: num(food.cost * ratio, 2),
+      });
+    } else {
+      batchQueue.push({ ...item });
+    }
+  });
+
+  processBatchQueue();
+});
+
+function processBatchQueue() {
+  if (!batchQueue.length) {
+    commitBatch();
+    return;
+  }
+  const item = batchQueue[0];
+  // reuse quick-add modal but in batch mode
+  qmBatchMode = true;
+  openQuickModal(item.name);
+  // pre-fill grams
+  document.getElementById('qmGrams').value = item.grams;
+}
+
+// flag so qmConfirm knows to continue the queue
+let qmBatchMode = false;
+
+// ── Quick-add modal ───────────────────────────────────────────
+document.getElementById('customToggle').addEventListener('click', () => {
+  document.getElementById('customForm').classList.toggle('show');
+});
+
+document.getElementById('saveCustomBtn').addEventListener('click', () => {
+  const name = document.getElementById('cfName').value.trim();
+  const cal  = parseFloat(document.getElementById('cfCal').value);
+  if (!name)      { toast('请输入食物名称'); return; }
+  if (isNaN(cal)) { toast('请输入热量'); return; }
+
+  const newEntry = {
+    name,
+    cal:  num(cal),
+    pro:  num(parseFloat(document.getElementById('cfPro').value)  || 0),
+    fat:  num(parseFloat(document.getElementById('cfFat').value)  || 0),
+    carb: num(parseFloat(document.getElementById('cfCarb').value) || 0),
+    cost: num(parseFloat(document.getElementById('cfCost').value) || 0, 2),
+  };
+  const existingIdx = customFoods.findIndex(f => f.name === name);
+  const isOverwrite = existingIdx >= 0;
+  if (isOverwrite) {
+    customFoods[existingIdx] = newEntry;
+  } else {
+    customFoods.push(newEntry);
+  }
+  saveCustomFoods();
+  rebuildFoods();
+
+  ['cfName','cfCal','cfPro','cfFat','cfCarb','cfCost'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('customForm').classList.remove('show');
+  toast(isOverwrite ? `已更新自定义食物：${name}` : `已添加自定义食物：${name}`);
+});
+
+// ── Loss ratio calculator ──────────────────────────────────────
+const lossModal = document.getElementById('lossModal');
+const LOSS_FIELDS = ['lmFoodName','lmRawWeight','lmCookedWithPlate','lmPlateWeight','lmAfterEatWithPlate','lmCal100','lmPro100','lmFat100','lmCarb100','lmCost100'];
+const STORAGE_LOSS = 'diet_loss_drafts'; // now an array of draft objects
+
+// Each draft: { name, lmFoodName, lmRawWeight, ... }
+function getLossDrafts() {
+  return JSON.parse(localStorage.getItem(STORAGE_LOSS) || '[]');
+}
+function saveLossDrafts(drafts) {
+  localStorage.setItem(STORAGE_LOSS, JSON.stringify(drafts));
+}
+
+// currently editing draft index (-1 = new)
+let lossEditingIdx = -1;
+
+function renderLossDraftList() {
+  const container = document.getElementById('lossDraftList');
+  const drafts = getLossDrafts();
+  if (!drafts.length) { container.innerHTML = ''; return; }
+  container.innerHTML = drafts.map((d, i) => {
+    const name = d.lmFoodName || '未命名';
+    // show which fields are filled as a hint
+    const filled = [
+      d.lmRawWeight        ? '生重' : '',
+      d.lmCookedWithPlate  ? '熟重' : '',
+      d.lmPlateWeight      ? '盘重' : '',
+      d.lmAfterEatWithPlate? '吃后' : '',
+    ].filter(Boolean).join('·');
+    return `<div class="loss-draft-item" data-idx="${i}">
+      <span class="loss-draft-name">${name}</span>
+      <span class="loss-draft-hint">${filled || '暂无数据'}</span>
+      <button class="loss-draft-del" data-idx="${i}" title="删除草稿">×</button>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.loss-draft-item').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.classList.contains('loss-draft-del')) return;
+      openLossModal(parseInt(el.dataset.idx));
+    });
+  });
+  container.querySelectorAll('.loss-draft-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.idx);
+      const drafts = getLossDrafts();
+      drafts.splice(idx, 1);
+      saveLossDrafts(drafts);
+      renderLossDraftList();
+    });
+  });
+}
+
+function openLossModal(draftIdx) {
+  lossEditingIdx = (draftIdx !== undefined) ? draftIdx : -1;
+  const drafts = getLossDrafts();
+  const draft  = (lossEditingIdx >= 0 && drafts[lossEditingIdx]) ? drafts[lossEditingIdx] : {};
+  LOSS_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = draft[id] !== undefined ? draft[id] : '';
+  });
+  lossModal.classList.add('show');
+  lossRecalc();
+  setTimeout(() => document.getElementById('lmFoodName').focus(), 60);
+}
+
+function closeLossModal() {
+  lossModal.classList.remove('show');
+  hideLmCandidates();
+}
+
+document.getElementById('lossCalcToggle').addEventListener('click', () => openLossModal());
+document.getElementById('lmCancel').addEventListener('click', closeLossModal);
+lossModal.addEventListener('click', e => { if (e.target === lossModal) closeLossModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && lossModal.classList.contains('show')) closeLossModal();
+});
+
+// Auto-fill nutrition from food database
+function lmFillFromFood(food) {
+  document.getElementById('lmCal100').value  = food.cal  || '';
+  document.getElementById('lmPro100').value  = food.pro  || '';
+  document.getElementById('lmFat100').value  = food.fat  || '';
+  document.getElementById('lmCarb100').value = food.carb || '';
+  document.getElementById('lmCost100').value = food.cost || '';
+  lossRecalc();
+  toast(`已填充「${food.name}」的营养数据`);
+  hideLmCandidates();
+}
+
+function hideLmCandidates() {
+  const el = document.getElementById('lmCandidates');
+  el.classList.remove('show');
+  el.innerHTML = '';
+}
+
+document.getElementById('lmAutoFill').addEventListener('click', () => {
+  const name = document.getElementById('lmFoodName').value.trim();
+  if (!name) { toast('请先输入食物名称'); return; }
+
+  // collect all matches: exact first, then includes
+  const exact    = allFoods.filter(f => f.name === name);
+  const contains = allFoods.filter(f => f.name !== name && f.name.includes(name));
+  const reverse  = allFoods.filter(f => f.name !== name && !f.name.includes(name) && name.includes(f.name));
+  const matches  = [...exact, ...contains, ...reverse];
+
+  if (!matches.length) { toast(`未找到「${name}」，请手动填写营养数据`); return; }
+  if (matches.length === 1) { lmFillFromFood(matches[0]); return; }
+
+  // multiple matches → show candidate list
+  const container = document.getElementById('lmCandidates');
+  container.innerHTML = matches.map((f, i) => {
+    const meta = [f.cal ? `${f.cal}kcal` : '', f.pro ? `蛋白${f.pro}g` : ''].filter(Boolean).join(' · ');
+    return `<div class="lm-candidate-item" data-idx="${i}">
+      <span class="lm-candidate-name">${f.name}</span>
+      <span class="lm-candidate-meta">${meta}</span>
+    </div>`;
+  }).join('');
+  container.classList.add('show');
+
+  container.querySelectorAll('.lm-candidate-item').forEach(el => {
+    el.addEventListener('click', () => {
+      lmFillFromFood(matches[parseInt(el.dataset.idx)]);
+    });
+  });
+});
+
+// Realtime recalc on any input change
+['lmRawWeight','lmCookedWithPlate','lmPlateWeight','lmAfterEatWithPlate','lmCal100','lmPro100','lmFat100','lmCarb100','lmCost100']
+  .forEach(id => document.getElementById(id).addEventListener('input', lossRecalc));
+
+function lossGetValues() {
+  const g = v => { const n = parseFloat(document.getElementById(v).value); return isNaN(n) ? null : n; };
+  return {
+    rawWeight:         g('lmRawWeight'),
+    cookedWithPlate:   g('lmCookedWithPlate'),
+    plateWeight:       g('lmPlateWeight'),
+    afterEatWithPlate: g('lmAfterEatWithPlate'),
+    cal100:  g('lmCal100'),
+    pro100:  g('lmPro100'),
+    fat100:  g('lmFat100'),
+    carb100: g('lmCarb100'),
+    cost100: g('lmCost100'),
+  };
+}
+
+function lossRecalc() {
+  const v = lossGetValues();
+  const box  = document.getElementById('lmResultBox');
+  const grid = document.getElementById('lmResultGrid');
+
+  const { cookedNet, actualEaten, lossRatio, calcWeight } = lossCalcFromValues(v);
+  const cost        = (v.rawWeight !== null && v.cost100 !== null) ? v.rawWeight * v.cost100 / 100 : null;
+
+  const rows = [];
+  if (cookedNet   !== null) rows.push(['加热后净重',  `${num(cookedNet, 1)} g`]);
+  if (actualEaten !== null) rows.push(['实际吃了',    `${num(actualEaten, 1)} g`]);
+  if (lossRatio   !== null) rows.push(['损耗率',      `${Math.round(lossRatio * 100)} %`]);
+  if (calcWeight  !== null) rows.push(['真实计算重量', `${num(calcWeight, 1)} g`]);
+
+  if (calcWeight !== null) {
+    const r = calcWeight / 100;
+    if (v.cal100  !== null) rows.push(['实际摄入热量',   `${num(v.cal100  * r, 0)} kcal`]);
+    if (v.pro100  !== null) rows.push(['实际摄入蛋白质', `${num(v.pro100  * r, 1)} g`]);
+    if (v.fat100  !== null) rows.push(['实际摄入脂肪',   `${num(v.fat100  * r, 1)} g`]);
+    if (v.carb100 !== null) rows.push(['实际摄入碳水',   `${num(v.carb100 * r, 1)} g`]);
+  }
+  if (cost !== null) rows.push(['成本（按生重）', `¥ ${num(cost, 2)}`]);
+
+  if (!rows.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  grid.innerHTML = rows.map(([label, val]) =>
+    `<div style="color:var(--text2)">${label}</div><div style="font-weight:600;color:var(--text)">${val}</div>`
+  ).join('');
+}
+
+function lossCurrentDraft() {
+  const draft = {};
+  LOSS_FIELDS.forEach(id => { draft[id] = document.getElementById(id).value; });
+  return draft;
+}
+
+// Save draft (partial data) — upsert into draft list
+document.getElementById('lmSave').addEventListener('click', () => {
+  const name = document.getElementById('lmFoodName').value.trim();
+  const draft = lossCurrentDraft();
+  const drafts = getLossDrafts();
+  if (lossEditingIdx >= 0 && drafts[lossEditingIdx]) {
+    drafts[lossEditingIdx] = draft;
+  } else {
+    // check if same name already exists, overwrite
+    const sameIdx = name ? drafts.findIndex(d => d.lmFoodName === name) : -1;
+    if (sameIdx >= 0) drafts[sameIdx] = draft;
+    else drafts.push(draft);
+  }
+  saveLossDrafts(drafts);
+  renderLossDraftList();
+  toast(`「${name || '草稿'}」已保存`);
+  closeLossModal();
+});
+
+// Add to today's log
+document.getElementById('lmAdd').addEventListener('click', () => {
+  const name = document.getElementById('lmFoodName').value.trim();
+  if (!name) { toast('请输入食物名称'); return; }
+
+  const v = lossGetValues();
+  const { cookedNet, actualEaten, lossRatio, calcWeight } = lossCalcFromValues(v);
+
+  if (calcWeight === null) { toast('请填写完整的称重数据才能添加'); return; }
+  if (v.cal100 === null)   { toast('请填写每百克热量'); return; }
+
+  const r    = calcWeight / 100;
+  const cost = (v.rawWeight !== null && v.cost100 !== null) ? num(v.rawWeight * v.cost100 / 100, 2) : 0;
+
+  const entry = {
+    id:   Date.now(),
+    name,
+    g:    num(calcWeight, 1),
+    cal:  num(v.cal100  * r),
+    pro:  v.pro100  !== null ? num(v.pro100  * r) : 0,
+    fat:  v.fat100  !== null ? num(v.fat100  * r) : 0,
+    carb: v.carb100 !== null ? num(v.carb100 * r) : 0,
+    cost,
+  };
+
+  const logs = getLogs(currentDate);
+  logs.push(entry);
+  saveLogs(currentDate, logs);
+  renderLog();
+
+  // remove this draft from list after successful add
+  const drafts = getLossDrafts();
+  if (lossEditingIdx >= 0 && drafts[lossEditingIdx]) {
+    drafts.splice(lossEditingIdx, 1);
+  } else {
+    const sameIdx = drafts.findIndex(d => d.lmFoodName === name);
+    if (sameIdx >= 0) drafts.splice(sameIdx, 1);
+  }
+  saveLossDrafts(drafts);
+  renderLossDraftList();
+
+  toast(`已添加：${name}（计算重量 ${num(calcWeight,1)}g）`);
+  closeLossModal();
+});
+
+// ── Init ──────────────────────────────────────────────────────
+loadCustomFoods();
+loadCSV();
+renderLog();
+loadDateImage();
+loadDateNote();
+renderLossDraftList();
+
+// ── Gallery / Calendar ─────────────────────────────────────────
+let galYear, galMonth;
+(function initGalMonth() {
+  const t = new Date();
+  galYear = t.getFullYear(); galMonth = t.getMonth();
+})();
+
+renderCalendar();
+
+function renderCalendar() {
+  const label = document.getElementById('galMonthLabel');
+  label.textContent = `${galYear}/${String(galMonth+1).padStart(2,'0')}`;
+
+  const grid = document.getElementById('calGrid');
+  const todayStr = today();
+  const daysInMonth = new Date(galYear, galMonth + 1, 0).getDate();
+  const firstDow    = new Date(galYear, galMonth, 1).getDay(); // 0=Sun
+
+  let html = '';
+  for (let i = 0; i < firstDow; i++) html += `<div class="cal-cell empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${galYear}-${String(galMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const b64 = getImage(dateStr);
+    const isToday = dateStr === todayStr;
+    const cls = ['cal-cell', b64 ? 'has-img' : 'no-img', isToday ? 'today' : ''].filter(Boolean).join(' ');
+    const bgStyle = b64 ? ` style="background-image:url('${b64}');background-size:cover;background-position:center"` : '';
+    html += `<div class="${cls}" data-date="${dateStr}"${bgStyle}><span class="cal-cell-date">${d}</span></div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // measure cell width and lock ALL row heights via grid-auto-rows + explicit height
+  const sz = grid.getBoundingClientRect().width;
+  const cellSz = Math.floor((sz - 3 * 6) / 7); // 6 gaps of 3px, 7 columns
+  grid.style.gridAutoRows = cellSz + 'px';
+  grid.querySelectorAll('.cal-cell').forEach(c => {
+    c.style.height = cellSz + 'px';
+    c.style.overflow = 'hidden';
+  });
+
+  grid.querySelectorAll('.cal-cell:not(.empty)').forEach(cell => {
+    cell.addEventListener('click', () => openDayModal(cell.dataset.date));
+  });
+}
+
+document.getElementById('galPrevMonth').addEventListener('click', () => {
+  galMonth--; if (galMonth < 0) { galMonth = 11; galYear--; }
+  renderCalendar();
+});
+document.getElementById('galNextMonth').addEventListener('click', () => {
+  galMonth++; if (galMonth > 11) { galMonth = 0; galYear++; }
+  renderCalendar();
+});
+
+window.addEventListener('resize', () => {
+  const grid = document.getElementById('calGrid');
+  const sz = grid.getBoundingClientRect().width;
+  const cellSz = Math.floor((sz - 3 * 6) / 7);
+  grid.style.gridAutoRows = cellSz + 'px';
+  grid.querySelectorAll('.cal-cell').forEach(c => { c.style.height = cellSz + 'px'; });
+});
+
+// ── Day Detail Modal ───────────────────────────────────────────
+const dayModal = document.getElementById('dayModal');
+document.getElementById('dayModalClose').addEventListener('click', () => dayModal.classList.remove('show'));
+dayModal.addEventListener('click', e => { if (e.target === dayModal) dayModal.classList.remove('show'); });
+
+let dayModalCurrentDate = null;
+
+function openDayModal(dateStr) {
+  dayModalCurrentDate = dateStr;
+  const b64  = getImage(dateStr);
+  const logs = getLogs(dateStr);
+
+  // image
+  const wrap = document.getElementById('dayModalImgWrap');
+  wrap.innerHTML = b64
+    ? `<img class="day-modal-img" src="${b64}" alt="${dateStr}">`
+    : `<div class="day-modal-img-placeholder">📷</div>`;
+
+  // date
+  document.getElementById('dayModalDate').textContent = dateStr;
+
+  // stats
+  const tot = aggregateLogs(logs);
+  const { pPro, pFat, pCarb } = calcMacroRatios(tot.pro, tot.fat, tot.carb);
+  const pP = Math.round(pPro), pF = Math.round(pFat), pC = 100 - pP - pF;
+  document.getElementById('dayModalStats').innerHTML = `
+    <div class="day-stat-card"><div class="day-stat-label">总热量</div><div class="day-stat-val c-cal">${Math.round(tot.cal)}</div><div class="day-stat-unit">kcal</div></div>
+    <div class="day-stat-card">
+      <div class="day-stat-label">三大元素比例</div>
+      <div style="font-size:11px;font-weight:700;margin:4px 0 2px;line-height:1.5">
+        <span style="color:var(--accent2)">蛋白 ${pP}%</span> ·
+        <span style="color:var(--yellow)">脂肪 ${pF}%</span> ·
+        <span style="color:var(--green)">碳水 ${pC}%</span>
+      </div>
+      <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:4px">
+        <div style="width:${pP}%;background:var(--accent2)"></div>
+        <div style="width:${pF}%;background:var(--yellow)"></div>
+        <div style="width:${pC}%;background:var(--green)"></div>
+      </div>
+    </div>
+    <div class="day-stat-card"><div class="day-stat-label">总成本</div><div class="day-stat-val c-cost">${num(tot.cost,2)}</div><div class="day-stat-unit">元</div></div>
+  `;
+
+  // log
+  const logEl = document.getElementById('dayModalLog');
+  if (!logs.length) {
+    logEl.innerHTML = `<div style="color:var(--text2);font-size:12px;padding:8px 0">暂无饮食记录</div>`;
+  } else {
+    logEl.innerHTML = logs.map(e =>
+      `<div class="day-modal-log-row">
+        <span>${e.name} <span style="color:var(--text2)">${e.g}g</span></span>
+        <span style="color:var(--accent)">${e.cal} kcal</span>
+      </div>`
+    ).join('');
+  }
+
+  dayModal.classList.add('show');
+}
+
+document.getElementById('dayModalPoster').addEventListener('click', () => {
+  if (dayModalCurrentDate) generatePoster(dayModalCurrentDate);
+});
+document.getElementById('exportPosterBtn').addEventListener('click', () => {
+  generateMonthPoster(galYear, galMonth);
+});
+
+// ── Poster generation ─────────────────────────────────────────
+function generatePoster(dateStr) {
+  const b64  = getImage(dateStr);
+  const logs = getLogs(dateStr);
+  const tot  = aggregateLogs(logs);
+
+  const W = 600, H = 800;
+  const DPR = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // background gradient
+  const grd = ctx.createLinearGradient(0, 0, W, H);
+  grd.addColorStop(0, '#0f0f13'); grd.addColorStop(1, '#1a1a28');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+
+  // decorative corner accent
+  ctx.strokeStyle = '#7c6af7'; ctx.lineWidth = 2; ctx.globalAlpha = 0.3;
+  ctx.strokeRect(16, 16, W-32, H-32);
+  ctx.globalAlpha = 1;
+
+  const drawPoster = () => {
+    // date header
+    ctx.font = 'bold 28px system-ui, sans-serif';
+    ctx.fillStyle = '#e8e8f0';
+    ctx.textAlign = 'center';
+    ctx.fillText(dateStr, W/2, 60);
+
+    // image area
+    const imgY = 80, imgH = 300;
+    if (b64) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        roundRect(ctx, 30, imgY, W-60, imgH, 16);
+        ctx.clip();
+        ctx.drawImage(img, 30, imgY, W-60, imgH);
+        ctx.restore();
+        drawPosterStats();
+      };
+      img.src = b64;
+    } else {
+      ctx.fillStyle = '#1a1a24';
+      roundRect(ctx, 30, imgY, W-60, imgH, 16);
+      ctx.fill();
+      ctx.font = '48px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText('🍽️', W/2, imgY + imgH/2 + 16);
+      drawPosterStats();
+    }
+  };
+
+  const drawPosterStats = () => {
+    const statsY = 410;
+    // stat boxes
+    const statItems = [
+      { label: '总热量', val: Math.round(tot.cal), unit: 'kcal', color: '#f77c6a' },
+      { label: '蛋白质', val: num(tot.pro), unit: 'g', color: '#56cfe1' },
+      { label: '脂肪',   val: num(tot.fat), unit: 'g', color: '#f0c040' },
+      { label: '碳水',   val: num(tot.carb), unit: 'g', color: '#5ecf8b' },
+    ];
+    const bw = (W - 80) / 4 - 8;
+    statItems.forEach((s, i) => {
+      const x = 40 + i * (bw + 10.67);
+      ctx.fillStyle = '#1a1a24';
+      roundRect(ctx, x, statsY, bw, 76, 12); ctx.fill();
+      ctx.font = '11px system-ui'; ctx.fillStyle = '#8888aa'; ctx.textAlign = 'center';
+      ctx.fillText(s.label, x + bw/2, statsY + 20);
+      ctx.font = 'bold 22px system-ui'; ctx.fillStyle = s.color;
+      ctx.fillText(s.val, x + bw/2, statsY + 48);
+      ctx.font = '10px system-ui'; ctx.fillStyle = '#8888aa';
+      ctx.fillText(s.unit, x + bw/2, statsY + 66);
+    });
+
+    // food list
+    const listY = statsY + 100;
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#8888aa'; ctx.textAlign = 'left';
+    ctx.fillText('今日饮食', 40, listY);
+    const maxItems = Math.min(logs.length, 8);
+    logs.slice(0, maxItems).forEach((e, i) => {
+      const y = listY + 22 + i * 26;
+      ctx.font = '12px system-ui'; ctx.fillStyle = '#e8e8f0'; ctx.textAlign = 'left';
+      ctx.fillText(`${e.name}  ${e.g}g`, 40, y);
+      ctx.font = '12px system-ui'; ctx.fillStyle = '#7c6af7'; ctx.textAlign = 'right';
+      ctx.fillText(`${e.cal} kcal`, W - 40, y);
+      ctx.strokeStyle = '#2e2e42'; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.moveTo(40, y+6); ctx.lineTo(W-40, y+6); ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+    if (logs.length > 8) {
+      ctx.font = '11px system-ui'; ctx.fillStyle = '#8888aa'; ctx.textAlign = 'center';
+      ctx.fillText(`… 共 ${logs.length} 项`, W/2, listY + 22 + 8 * 26);
+    }
+
+    // footer
+    ctx.font = '11px system-ui'; ctx.fillStyle = '#444466'; ctx.textAlign = 'center';
+    ctx.fillText('Diet Tracker · 热量 & 成本', W/2, H - 24);
+
+    downloadCanvas(canvas, `饮食海报_${dateStr}.png`);
+  };
+
+  drawPoster();
+}
+
+function generateMonthPoster(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDow    = new Date(year, month, 1).getDay();
+  const COLS = 7, CELL = 100, PAD = 24, HEADER = 90, DOW_H = 32;
+  const rows = Math.ceil((firstDow + daysInMonth) / 7);
+  const W = COLS * CELL + PAD * 2;
+  const H = HEADER + DOW_H + rows * CELL + PAD * 2;
+  const DPR = 2;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // bg
+  const grd = ctx.createLinearGradient(0, 0, W, H);
+  grd.addColorStop(0, '#0f0f13'); grd.addColorStop(1, '#1a1a28');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+
+  // title
+  ctx.font = 'bold 26px system-ui, sans-serif'; ctx.fillStyle = '#e8e8f0'; ctx.textAlign = 'center';
+  ctx.fillText(`${year} 年 ${month+1} 月`, W/2, 50);
+  ctx.font = '11px system-ui'; ctx.fillStyle = '#8888aa';
+  ctx.fillText('Diet Tracker · 饮食记录', W/2, 72);
+
+  // dow labels
+  ['日','一','二','三','四','五','六'].forEach((d, i) => {
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#8888aa'; ctx.textAlign = 'center';
+    ctx.fillText(d, PAD + i * CELL + CELL/2, HEADER + 18);
+  });
+
+  const drawCells = (imgMap) => {
+    const todayStr = today();
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const idx = firstDow + d - 1;
+      const col = idx % COLS, row = Math.floor(idx / COLS);
+      const x = PAD + col * CELL + 2;
+      const y = HEADER + DOW_H + row * CELL + 2;
+      const cw = CELL - 4, ch = CELL - 4;
+      const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday = dateStr === todayStr;
+
+      ctx.fillStyle = '#1a1a24';
+      roundRect(ctx, x, y, cw, ch, 8); ctx.fill();
+
+      if (isToday) {
+        ctx.strokeStyle = '#7c6af7'; ctx.lineWidth = 1.5;
+        roundRect(ctx, x, y, cw, ch, 8); ctx.stroke();
+      }
+
+      const imgEl = imgMap.get(dateStr);
+      if (imgEl) {
+        ctx.save();
+        ctx.beginPath(); roundRect(ctx, x, y, cw, ch, 8); ctx.clip();
+        ctx.drawImage(imgEl, x, y, cw, ch);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(x, y + ch - 16, cw, 16);
+        ctx.font = 'bold 10px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.textAlign = 'center';
+        ctx.fillText(d, x + cw/2, y + ch - 4);
+      } else {
+        ctx.font = 'bold 14px system-ui'; ctx.fillStyle = isToday ? '#7c6af7' : '#2e2e42'; ctx.textAlign = 'center';
+        ctx.fillText(d, x + cw/2, y + ch/2 + 5);
+      }
+    }
+
+    downloadCanvas(canvas, `月度海报_${year}-${String(month+1).padStart(2,'0')}.png`);
+  };
+
+  // preload all images for the month, build a Map<dateStr, HTMLImageElement>
+  const imgMap = new Map();
+  const allDates = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const b64 = getImage(dateStr);
+    if (b64) allDates.push({ dateStr, b64 });
+  }
+  if (!allDates.length) { drawCells(imgMap); return; }
+  let loaded = 0;
+  allDates.forEach(item => {
+    const img = new Image();
+    img.onload = () => {
+      imgMap.set(item.dateStr, img);
+      loaded++;
+      if (loaded === allDates.length) drawCells(imgMap);
+    };
+    img.onerror = () => {
+      loaded++;
+      if (loaded === allDates.length) drawCells(imgMap);
+    };
+    img.src = item.b64;
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function downloadCanvas(canvas, filename) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = filename;
+  a.click();
+}
+
+// ── Mobile tab nav ────────────────────────────────────────────
+const COLS = ['colLeft','colMid','colRight'];
+document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const idx = parseInt(btn.dataset.col);
+    document.querySelectorAll('.mobile-nav-btn').forEach((b,i) => b.classList.toggle('active', i === idx));
+    COLS.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('mobile-active', i === idx);
+    });
+    if (idx === 2) { setTimeout(renderChart, 80); }
+  });
+});
+
+// ── Voice waveform (wired in setRecordingState above) ─────────
+
+// ── CSV Export ────────────────────────────────────────────────
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  const allLogs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+  const dates = Object.keys(allLogs).sort();
+  if (!dates.length) { toast('暂无数据可导出'); return; }
+
+  const rows = [['日期','食物名称','克数(g)','热量(kcal)','蛋白质(g)','脂肪(g)','碳水(g)','成本(元)']];
+  dates.forEach(date => {
+    (allLogs[date] || []).forEach(e => {
+      rows.push([date, e.name, e.g, e.cal, e.pro, e.fat, e.carb, e.cost || 0]);
+    });
+  });
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `饮食记录_${today()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`已导出 ${rows.length - 1} 条记录`);
+});
+
+// ── CSV Import ────────────────────────────────────────────────
+document.getElementById('importCsvBtn').addEventListener('click', () => {
+  document.getElementById('importCsvInput').click();
+});
+
+document.getElementById('importCsvInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      // strip BOM (U+FEFF) reliably
+      let text = ev.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+      const rows = parsed.data;
+      if (!rows.length) { toast('CSV 文件为空或格式不正确'); return; }
+
+      // normalise header keys: strip surrounding quotes, trim spaces
+      const normalise = s => String(s || '').replace(/^["'“”]+|["'“”]+$/g, '').trim();
+
+      const allLogs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+      let imported = 0;
+
+      rows.forEach(r => {
+        // remap keys after normalisation
+        const row = {};
+        Object.keys(r).forEach(k => { row[normalise(k)] = normalise(r[k]); });
+
+        let date = row['日期'] || '';
+        // normalise: "2026/6/12" or "2026/06/12" → "2026-06-12"
+        date = date.replace(/\//g, '-').replace(/^(\d{4})-(\d{1,2})-(\d{1,2})$/, (_, y, m, d) =>
+          `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+
+        if (!allLogs[date]) allLogs[date] = [];
+        const entry = {
+          id:   Date.now() + Math.random(),
+          name: row['食物名称'] || '未知食物',
+          g:    num(row['克数(g)']    ?? row['克数']    ?? 0),
+          cal:  num(row['热量(kcal)'] ?? row['热量']    ?? 0),
+          pro:  num(row['蛋白质(g)']  ?? row['蛋白质']  ?? 0),
+          fat:  num(row['脂肪(g)']    ?? row['脂肪']    ?? 0),
+          carb: num(row['碳水(g)']    ?? row['碳水']    ?? 0),
+          cost: num(row['成本(元)']   ?? row['成本']    ?? 0, 2),
+        };
+        if (!entry.name || entry.g <= 0) return;
+        allLogs[date].push(entry);
+        imported++;
+      });
+
+      localStorage.setItem(STORAGE_LOGS, JSON.stringify(allLogs));
+      renderLog();
+      renderChart();
+      if (imported > 0) {
+        toast(`已导入 ${imported} 条记录`);
+      } else {
+        // show first row keys to help debug
+        const firstRow = rows[0];
+        const keys = Object.keys(firstRow).map(k => `"${k}"`).join(', ');
+        toast(`导入 0 条 — 列名: ${keys.slice(0, 80)}`);
+      }
+    } catch(err) {
+      toast('CSV 解析失败：' + err.message);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+  e.target.value = '';
+});
+
+// ── Clear Data ────────────────────────────────────────────────
+const clearModal        = document.getElementById('clearModal');
+const clearConfirmModal = document.getElementById('clearConfirmModal');
+let clearPendingAction  = null;
+
+document.getElementById('clearDataBtn').addEventListener('click', () => {
+  document.getElementById('clearDayLabel').textContent = `仅删除 ${currentDate} 的所有饮食记录`;
+  clearModal.classList.add('show');
+});
+document.getElementById('clearModalCancel').addEventListener('click', () => clearModal.classList.remove('show'));
+clearModal.addEventListener('click', e => { if (e.target === clearModal) clearModal.classList.remove('show'); });
+
+document.getElementById('clearDayBtn').addEventListener('click', () => {
+  clearModal.classList.remove('show');
+  document.getElementById('clearConfirmText').textContent = `确定要删除 ${currentDate} 的所有饮食记录吗？此操作不可撤销。`;
+  clearPendingAction = 'day';
+  clearConfirmModal.classList.add('show');
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  clearModal.classList.remove('show');
+  const allLogs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+  const totalDays = Object.keys(allLogs).length;
+  document.getElementById('clearConfirmText').textContent = `确定要删除全部历史数据吗？共 ${totalDays} 天的饮食记录、图片和备注将被永久删除，此操作不可撤销。`;
+  clearPendingAction = 'all';
+  clearConfirmModal.classList.add('show');
+});
+
+document.getElementById('clearConfirmCancel').addEventListener('click', () => {
+  clearConfirmModal.classList.remove('show');
+  clearPendingAction = null;
+});
+clearConfirmModal.addEventListener('click', e => { if (e.target === clearConfirmModal) { clearConfirmModal.classList.remove('show'); clearPendingAction = null; } });
+
+document.getElementById('clearConfirmOk').addEventListener('click', () => {
+  if (clearPendingAction === 'day') {
+    saveLogs(currentDate, []);
+    renderLog();
+    toast(`已清除 ${currentDate} 的记录`);
+  } else if (clearPendingAction === 'all') {
+    localStorage.removeItem(STORAGE_LOGS);
+    localStorage.removeItem(STORAGE_IMAGES);
+    localStorage.removeItem(STORAGE_NOTES);
+    renderLog();
+    loadDateImage();
+    loadDateNote();
+    renderCalendar();
+    renderChart();
+    toast('已清除全部历史数据');
+  }
+  clearConfirmModal.classList.remove('show');
+  clearPendingAction = null;
+});
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  JS CHART LAYER — dual-axis trend chart (Canvas 2D)          ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── Trend Chart ───────────────────────────────────────────────
+let chartExpanded = false;
+document.getElementById('chartToggle').addEventListener('click', () => {
+  chartExpanded = !chartExpanded;
+  document.getElementById('chartPanel').style.display = chartExpanded ? 'block' : 'none';
+  document.getElementById('chartToggle').textContent  = chartExpanded ? '收起' : '展开';
+  if (chartExpanded) renderChart();
+});
+
+document.getElementById('chartRange').addEventListener('change', renderChart);
+
+function renderChart() {
+  if (!chartExpanded) return;
+  const canvas = document.getElementById('trendChart');
+  const rangeVal = parseInt(document.getElementById('chartRange').value);
+  const allLogs = JSON.parse(localStorage.getItem(STORAGE_LOGS) || '{}');
+
+  // collect all dates with data
+  let dates = Object.keys(allLogs).sort();
+  if (rangeVal > 0) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - rangeVal + 1);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    dates = dates.filter(d => d >= cutoffStr);
+  }
+
+  if (!dates.length) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 200;
+    canvas.width = W; canvas.height = 120;
+    ctx.fillStyle = 'var(--surface2)';
+    ctx.fillRect(0, 0, W, 120);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#8888aa';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', W/2, 66);
+    return;
+  }
+
+  const calData  = dates.map(d => Math.round((allLogs[d] || []).reduce((s, e) => s + (e.cal  || 0), 0)));
+  const costData = dates.map(d => parseFloat(((allLogs[d] || []).reduce((s, e) => s + (e.cost || 0), 0)).toFixed(2)));
+
+  const DPR = window.devicePixelRatio || 1;
+  const W   = canvas.offsetWidth || 260;
+  const H   = 160;
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  const PAD_L = 40, PAD_R = 40, PAD_T = 18, PAD_B = 28;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+  const n = dates.length;
+
+  // background
+  ctx.fillStyle = '#1a1a24';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, W, H, 8);
+  ctx.fill();
+
+  // grid lines
+  ctx.strokeStyle = '#2e2e42';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = PAD_T + plotH * i / 4;
+    ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
+  }
+
+  // scales
+  const calMax  = Math.max(...calData,  1);
+  const costMax = Math.max(...costData, 0.1);
+
+  const xPos = i => PAD_L + (n === 1 ? plotW / 2 : i / (n - 1) * plotW);
+  const yCalPos  = v => PAD_T + plotH - (v / calMax)  * plotH;
+  const yCostPos = v => PAD_T + plotH - (v / costMax) * plotH;
+
+  // cal line (left axis)
+  ctx.strokeStyle = '#7c6af7';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  calData.forEach((v, i) => i === 0 ? ctx.moveTo(xPos(i), yCalPos(v)) : ctx.lineTo(xPos(i), yCalPos(v)));
+  ctx.stroke();
+
+  // cal area fill
+  ctx.fillStyle = 'rgba(124,106,247,0.08)';
+  ctx.beginPath();
+  calData.forEach((v, i) => i === 0 ? ctx.moveTo(xPos(i), yCalPos(v)) : ctx.lineTo(xPos(i), yCalPos(v)));
+  ctx.lineTo(xPos(n-1), PAD_T + plotH);
+  ctx.lineTo(xPos(0),   PAD_T + plotH);
+  ctx.closePath(); ctx.fill();
+
+  // cost line (right axis)
+  ctx.strokeStyle = '#f77c6a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  costData.forEach((v, i) => i === 0 ? ctx.moveTo(xPos(i), yCostPos(v)) : ctx.lineTo(xPos(i), yCostPos(v)));
+  ctx.stroke();
+
+  // dots
+  [{ data: calData, yFn: yCalPos, color: '#7c6af7' }, { data: costData, yFn: yCostPos, color: '#f77c6a' }].forEach(({ data, yFn, color }) => {
+    data.forEach((v, i) => {
+      ctx.beginPath();
+      ctx.arc(xPos(i), yFn(v), 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+    });
+  });
+
+  // left y-axis labels (cal)
+  ctx.font = `${10 * DPR / DPR}px sans-serif`;
+  ctx.fillStyle = '#7c6af7';
+  ctx.textAlign = 'right';
+  [0, 0.5, 1].forEach(t => {
+    const v = Math.round(calMax * t);
+    ctx.fillText(v, PAD_L - 4, PAD_T + plotH - t * plotH + 4);
+  });
+
+  // right y-axis labels (cost)
+  ctx.fillStyle = '#f77c6a';
+  ctx.textAlign = 'left';
+  [0, 0.5, 1].forEach(t => {
+    const v = (costMax * t).toFixed(1);
+    ctx.fillText(v, W - PAD_R + 4, PAD_T + plotH - t * plotH + 4);
+  });
+
+  // x-axis labels — show first, last and some middle labels
+  ctx.fillStyle = '#8888aa';
+  ctx.textAlign = 'center';
+  const step = n <= 7 ? 1 : n <= 14 ? 2 : n <= 31 ? 5 : 10;
+  dates.forEach((d, i) => {
+    if (i % step !== 0 && i !== n - 1) return;
+    const label = d.slice(5); // MM-DD
+    ctx.fillText(label, xPos(i), H - 6);
+  });
+}
+
+</script>
+<!-- v1.0.0 · Last updated 2026-06-11 -->
+</body>
+</html>
