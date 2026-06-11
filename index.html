@@ -533,6 +533,8 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     width: 360px;
+    max-height: 90vh;
+    overflow-y: auto;
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -657,7 +659,42 @@
   .parsed-item .pi-grams { color: var(--text2); white-space: nowrap; }
   .parsed-item .pi-status { font-size: 11px; white-space: nowrap; }
   .pi-matched { color: var(--green); }
+  .pi-fuzzy   { color: var(--accent); }
   .pi-unknown { color: var(--yellow); }
+
+  /* fuzzy match candidate list inside parsed-item */
+  .pi-candidates {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+  .pi-candidate-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 4px 8px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .pi-candidate-btn:hover { border-color: var(--accent); background: rgba(124,106,247,0.08); }
+  .pi-candidate-btn.selected { border-color: var(--green); color: var(--green); background: rgba(80,200,120,0.08); }
+  .pi-manual-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--text2);
+    font-size: 12px;
+    padding: 4px 8px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .pi-manual-btn:hover { border-color: var(--yellow); color: var(--yellow); }
   .parsed-item .pi-remove {
     border: none; background: none; color: var(--text2);
     cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
@@ -757,8 +794,18 @@
     .cal-grid { gap: 2px; }
 
     /* modals full-screen on mobile */
-    .modal { width: 100% !important; max-width: 100% !important; border-radius: 16px 16px 0 0; margin-top: auto; }
+    .modal {
+      width: 100% !important;
+      max-width: 100% !important;
+      max-height: 88vh;
+      border-radius: 16px 16px 0 0;
+      margin-top: auto;
+      padding: 16px;
+      gap: 10px;
+    }
     .modal-backdrop { align-items: flex-end; }
+    /* loss modal: collapse 3-col nutrition grid to 2-col on narrow screens */
+    .lm-nutrition-grid { grid-template-columns: 1fr 1fr !important; }
   }
 
   @media (max-width: 480px) {
@@ -990,7 +1037,7 @@
         <div class="upload-icon">📷</div>
         <div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>
       </div>
-      <input type="file" id="imgInput" accept="image/*" capture="environment">
+      <input type="file" id="imgInput" accept="image/*">
       <div class="img-actions">
         <button class="btn btn-ghost btn-sm" style="flex:1" id="uploadBtn">📸 拍照上传</button>
         <button class="btn btn-danger btn-sm" id="clearImgBtn">删除</button>
@@ -1151,7 +1198,7 @@
     <!-- Nutrition per 100g -->
     <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:8px;letter-spacing:.04em">🔬 每百克营养数据</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="lm-nutrition-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
         <div class="input-group">
           <label>热量 (kcal)</label>
           <input type="number" id="lmCal100" placeholder="0" min="0" step="0.1">
@@ -1861,7 +1908,14 @@ function parseVoiceTranscript(text) {
     toast('未能解析出食物和克数，请重新录音');
     return;
   }
-  voiceItems = found;
+  // attach fuzzy matches and selection state to each item
+  voiceItems = found.map(item => {
+    const exact = allFoods.find(f => f.name === item.name) || null;
+    const fuzzy = exact ? [] : allFoods.filter(f =>
+      f.name.includes(item.name) || item.name.includes(f.name)
+    ).slice(0, 6);
+    return { ...item, exact, fuzzy, selectedFood: exact || null, manualMode: false };
+  });
   renderVoiceParsed();
 }
 
@@ -1871,17 +1925,60 @@ function renderVoiceParsed() {
   if (!voiceItems.length) { wrap.innerHTML = ''; addBtn.style.display = 'none'; return; }
 
   wrap.innerHTML = voiceItems.map((item, i) => {
-    const matched = allFoods.find(f => f.name === item.name);
-    const statusHtml = matched
-      ? `<span class="pi-status pi-matched">✓ 已匹配</span>`
-      : `<span class="pi-status pi-unknown">? 待补充</span>`;
-    return `<div class="parsed-item" data-idx="${i}">
-      <span class="pi-name" title="${item.name}">${item.name}</span>
-      <span class="pi-grams">${item.grams}g</span>
-      ${statusHtml}
-      <button class="pi-remove" onclick="removeVoiceItem(${i})" title="移除">×</button>
+    let statusHtml, candidatesHtml = '';
+
+    if (item.selectedFood && !item.manualMode) {
+      const label = item.selectedFood.name === item.name ? '✓ 已匹配' : `✓ ${item.selectedFood.name}`;
+      statusHtml = `<span class="pi-status pi-matched">${label}</span>`;
+    } else if (item.manualMode) {
+      statusHtml = `<span class="pi-status pi-unknown">✏️ 手动输入</span>`;
+    } else if (item.fuzzy.length) {
+      statusHtml = `<span class="pi-status pi-fuzzy">～ 模糊匹配</span>`;
+      const btns = item.fuzzy.map((f, fi) =>
+        `<button class="pi-candidate-btn" data-item="${i}" data-fi="${fi}">${f.name}</button>`
+      ).join('');
+      candidatesHtml = `<div class="pi-candidates">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:2px">选择匹配项，或：</div>
+        ${btns}
+        <button class="pi-manual-btn" data-item="${i}" data-manual="1">✏️ 手动输入营养数据</button>
+      </div>`;
+    } else {
+      statusHtml = `<span class="pi-status pi-unknown">? 未找到</span>`;
+      candidatesHtml = `<div class="pi-candidates">
+        <button class="pi-manual-btn" data-item="${i}" data-manual="1">✏️ 手动输入营养数据</button>
+      </div>`;
+    }
+
+    return `<div class="parsed-item" style="flex-direction:column;align-items:stretch" data-idx="${i}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="pi-name" title="${item.name}">${item.name}</span>
+        <span class="pi-grams">${item.grams}g</span>
+        ${statusHtml}
+        <button class="pi-remove" onclick="removeVoiceItem(${i})" title="移除">×</button>
+      </div>
+      ${candidatesHtml}
     </div>`;
   }).join('');
+
+  // bind candidate buttons
+  wrap.querySelectorAll('.pi-candidate-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i  = parseInt(btn.dataset.item);
+      const fi = parseInt(btn.dataset.fi);
+      voiceItems[i].selectedFood = voiceItems[i].fuzzy[fi];
+      voiceItems[i].manualMode   = false;
+      renderVoiceParsed();
+    });
+  });
+  wrap.querySelectorAll('.pi-manual-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.dataset.item);
+      voiceItems[i].manualMode   = true;
+      voiceItems[i].selectedFood = null;
+      renderVoiceParsed();
+    });
+  });
+
   addBtn.style.display = 'block';
 }
 
@@ -1900,7 +1997,7 @@ document.getElementById('voiceAddBtn').addEventListener('click', () => {
   batchQueue = [];
 
   voiceItems.forEach(item => {
-    const food = allFoods.find(f => f.name === item.name);
+    const food = item.selectedFood || allFoods.find(f => f.name === item.name) || null;
     if (food) {
       const ratio = item.grams / 100;
       batchReady.push({
@@ -2587,7 +2684,7 @@ document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('mobile-active', i === idx);
     });
-    if (idx === 2) { setTimeout(renderChart, 80); }
+    if (idx === 2) { setTimeout(renderChart, 80); loadDateImage(); }
   });
 });
 
