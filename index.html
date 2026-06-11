@@ -1033,13 +1033,13 @@
   <div class="col" id="colRight">
     <div class="col-header">每日图片</div>
     <div class="right-body">
-      <div class="img-upload-area" id="imgUploadArea">
+      <label for="imgInput" class="img-upload-area" id="imgUploadArea">
         <div class="upload-icon">📷</div>
         <div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>
-      </div>
+      </label>
       <input type="file" id="imgInput" accept="image/*">
       <div class="img-actions">
-        <button class="btn btn-ghost btn-sm" style="flex:1" id="uploadBtn">📸 拍照上传</button>
+        <label for="imgInput" class="btn btn-ghost btn-sm" style="flex:1;text-align:center;cursor:pointer">📸 上传图片</label>
         <button class="btn btn-danger btn-sm" id="clearImgBtn">删除</button>
       </div>
       <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);flex-shrink:0">
@@ -1657,9 +1657,6 @@ function compressAndSave(file, date, onDone) {
   reader.readAsDataURL(file);
 }
 
-imgUploadArea.addEventListener('click', () => imgInput.click());
-document.getElementById('uploadBtn').addEventListener('click', () => imgInput.click());
-
 imgInput.addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1701,7 +1698,6 @@ function renderImage(b64) {
   } else {
     area.innerHTML = `<div class="upload-icon">📷</div><div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>`;
     area.classList.remove('has-img');
-    area.onclick = () => imgInput.click();
   }
 }
 
