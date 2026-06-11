@@ -1066,7 +1066,7 @@
         </div>
         <div class="record-label" id="recordLabel">点击开始录音</div>
         <textarea class="voice-transcript placeholder" id="voiceTranscript" rows="3" style="resize:vertical;width:100%;box-sizing:border-box">识别结果将显示在这里…</textarea>
-        <button class="btn btn-ghost btn-sm" id="voiceParseBtn" style="display:none;margin-top:4px">🔍 解析热量</button>
+        <button class="btn btn-ghost btn-sm" id="voiceParseBtn" style="margin-top:4px">🔍 解析热量</button>
         <div class="voice-parsed" id="voiceParsed"></div>
         <button class="btn btn-primary" id="voiceAddBtn" style="display:none">✅ 批量添加到今日记录</button>
       </div>
@@ -1855,9 +1855,6 @@ function initRecognition() {
     const el = document.getElementById('voiceTranscript');
     el.value = transcript;
     el.classList.remove('placeholder');
-    if (e.results[e.results.length - 1].isFinal) {
-      document.getElementById('voiceParseBtn').style.display = '';
-    }
   };
 
   r.onerror = e => {
@@ -1895,7 +1892,6 @@ function startRecording() {
   if (!recognition) return;
   voiceItems = [];
   renderVoiceParsed();
-  document.getElementById('voiceParseBtn').style.display = 'none';
   const el = document.getElementById('voiceTranscript');
   el.value = '识别结果将显示在这里…';
   el.classList.add('placeholder');
@@ -2010,7 +2006,6 @@ let batchReady   = [];   // fully resolved entries ready to commit
 document.getElementById('voiceParseBtn').addEventListener('click', () => {
   const text = document.getElementById('voiceTranscript').value.trim();
   if (!text || text === '识别结果将显示在这里…') return;
-  document.getElementById('voiceParseBtn').style.display = 'none';
   parseVoiceTranscript(text);
 });
 
