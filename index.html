@@ -637,6 +637,8 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-all;
+    font-family: inherit;
+    outline: none;
   }
   .voice-transcript.placeholder { color: var(--text2); font-style: italic; }
 
@@ -827,9 +829,9 @@
 
 <!-- MOBILE NAV TABS -->
 <div class="mobile-nav">
-  <button class="mobile-nav-btn active" data-col="0">⌨️ 添加食物</button>
+  <button class="mobile-nav-btn active" data-col="0">🖼 图片&图表</button>
   <button class="mobile-nav-btn" data-col="1">📊 今日统计</button>
-  <button class="mobile-nav-btn" data-col="2">🖼 图片&图表</button>
+  <button class="mobile-nav-btn" data-col="2">⌨️ 添加食物</button>
 </div>
 
 <!-- MAIN -->
@@ -837,109 +839,82 @@
 
   <!-- LEFT: 输入区 -->
   <div class="col mobile-active" id="colLeft">
-    <div class="col-header">添加食物</div>
-    <div class="left-body">
-
-      <!-- Mode toggle -->
-      <div class="mode-toggle">
-        <button class="mode-btn active" id="modeManual">⌨️ 手动输入</button>
-        <button class="mode-btn" id="modeVoice">🎙 语音输入</button>
+    <div class="col-header">每日图片</div>
+    <div class="right-body">
+      <div class="img-upload-area" id="imgUploadArea">
+        <div class="upload-icon">📷</div>
+        <div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>
+      </div>
+      <div class="img-actions">
+        <label class="btn btn-ghost btn-sm" style="flex:1;text-align:center;cursor:pointer">
+          📸 上传图片
+          <input type="file" id="imgInput" accept="image/*" style="display:none">
+        </label>
+        <button class="btn btn-danger btn-sm" id="clearImgBtn">删除</button>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);flex-shrink:0">
+        <div style="font-weight:600;color:var(--text);margin-bottom:6px">📝 备注</div>
+        <textarea id="noteInput"
+          placeholder="今日饮食备注、心情或感受…"
+          style="width:100%;background:transparent;border:none;color:var(--text);font-size:12px;resize:none;outline:none;min-height:60px;font-family:inherit;line-height:1.6"
+        ></textarea>
       </div>
 
-      <!-- MANUAL PANEL -->
-      <div class="manual-panel" id="manualPanel">
-        <!-- Search -->
-        <div class="search-wrap">
-          <span class="icon">🔍</span>
-          <input type="text" id="searchInput" placeholder="搜索食物名称…" autocomplete="off">
-        </div>
-        <div id="suggestions"></div>
-
-        <!-- Selected food preview -->
-        <div class="food-preview" id="foodPreview">
-          <div class="fp-name" id="fpName">—</div>
-          <div class="food-preview-grid">
-            <div class="fp-item"><span>热量</span><span class="fp-val" id="fpCal">—</span></div>
-            <div class="fp-item"><span>蛋白质</span><span class="fp-val" id="fpPro">—</span></div>
-            <div class="fp-item"><span>脂肪</span><span class="fp-val" id="fpFat">—</span></div>
-            <div class="fp-item"><span>碳水</span><span class="fp-val" id="fpCarb">—</span></div>
-          </div>
-          <div class="fp-item"><span>每100g参考成本</span><span class="fp-val" id="fpCost">—</span></div>
-        </div>
-
-        <!-- Grams & cost -->
-        <div class="input-row">
-          <div class="input-group">
-            <label>克数 (g)</label>
-            <input type="number" id="gramsInput" placeholder="100" min="1" max="9999">
-          </div>
-          <div class="input-group">
-            <label>实际成本 (元, 可选)</label>
-            <input type="number" id="costInput" placeholder="自动计算" step="0.01" min="0">
+      <!-- Gallery -->
+      <div class="gallery-section">
+        <div class="gallery-header">
+          <span class="gallery-title">每日一图展示柜</span>
+          <div class="gallery-month-nav">
+            <button id="galPrevMonth">‹</button>
+            <span class="gallery-month-label" id="galMonthLabel"></span>
+            <button id="galNextMonth">›</button>
           </div>
         </div>
-
-        <button class="btn btn-primary" id="addBtn">＋ 添加到今日记录</button>
+        <div class="cal-dow-row">
+          <div class="cal-dow">日</div><div class="cal-dow">一</div><div class="cal-dow">二</div>
+          <div class="cal-dow">三</div><div class="cal-dow">四</div><div class="cal-dow">五</div><div class="cal-dow">六</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <button class="gallery-export-btn" id="exportPosterBtn">✨ 导出本月海报</button>
       </div>
 
-      <!-- VOICE PANEL -->
-      <div class="voice-panel" id="voicePanel" style="display:none">
-        <button class="record-btn" id="recordBtn" title="按住录音">🎙</button>
-        <div class="waveform" id="waveform">
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
+      <!-- Data Management -->
+      <div class="gallery-section" style="margin-top:4px">
+        <div class="gallery-header" style="margin-bottom:8px">
+          <span class="gallery-title">📦 数据管理</span>
         </div>
-        <div class="record-label" id="recordLabel">点击开始录音</div>
-        <div class="voice-transcript placeholder" id="voiceTranscript">识别结果将显示在这里…</div>
-        <div class="voice-parsed" id="voiceParsed"></div>
-        <button class="btn btn-primary" id="voiceAddBtn" style="display:none">✅ 批量添加到今日记录</button>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <button class="btn btn-ghost btn-sm" id="exportCsvBtn" style="text-align:center">⬇️ 导出 CSV</button>
+            <button class="btn btn-ghost btn-sm" id="importCsvBtn" style="text-align:center">⬆️ 导入 CSV</button>
+          </div>
+          <input type="file" id="importCsvInput" accept=".csv" style="display:none">
+          <button class="btn btn-sm" id="clearDataBtn" style="background:rgba(247,106,106,0.12);color:var(--red);border:1px solid rgba(247,106,106,0.3)">🗑 清除数据…</button>
+        </div>
       </div>
 
-      <hr class="divider">
-
-      <!-- Custom food -->
-      <button class="custom-toggle" id="customToggle">
-        <span>＋</span> 添加自定义食物
-      </button>
-      <!-- Loss ratio calculator -->
-      <button class="custom-toggle" id="lossCalcToggle" style="margin-top:4px;color:var(--yellow)">
-        <span>⚖️</span> 损耗比例计算
-      </button>
-      <div id="lossDraftList"></div>
-      <div id="customForm">
-        <div class="input-group">
-          <label>食物名称 *</label>
-          <input type="text" id="cfName" placeholder="例：自制燕麦饼">
+      <!-- Chart -->
+      <div class="gallery-section" style="margin-top:4px" id="chartSection">
+        <div class="gallery-header" style="margin-bottom:8px">
+          <span class="gallery-title">📈 趋势图表</span>
+          <button class="btn btn-ghost btn-sm" id="chartToggle">展开</button>
         </div>
-        <div class="custom-grid">
-          <div class="input-group">
-            <label>热量 (kcal/100g) *</label>
-            <input type="number" id="cfCal" placeholder="0" min="0">
+        <div id="chartPanel" style="display:none">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+            <select id="chartRange" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:11px;outline:none;cursor:pointer">
+              <option value="7">近 7 天</option>
+              <option value="14">近 14 天</option>
+              <option value="30" selected>近 30 天</option>
+              <option value="90">近 3 月</option>
+              <option value="0">全部</option>
+            </select>
           </div>
-          <div class="input-group">
-            <label>蛋白质 (g/100g)</label>
-            <input type="number" id="cfPro" placeholder="0" min="0" step="0.1">
-          </div>
-          <div class="input-group">
-            <label>脂肪 (g/100g)</label>
-            <input type="number" id="cfFat" placeholder="0" min="0" step="0.1">
-          </div>
-          <div class="input-group">
-            <label>碳水 (g/100g)</label>
-            <input type="number" id="cfCarb" placeholder="0" min="0" step="0.1">
-          </div>
-          <div class="input-group">
-            <label>成本 (元/100g)</label>
-            <input type="number" id="cfCost" placeholder="0" min="0" step="0.01">
+          <canvas id="trendChart" style="width:100%;border-radius:8px;display:block"></canvas>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:6px;font-size:10px;color:var(--text2)">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block;border-radius:2px"></span>热量 kcal</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent3);display:inline-block;border-radius:2px"></span>成本 元</span>
           </div>
         </div>
-        <button class="btn btn-primary" id="saveCustomBtn">保存自定义食物</button>
       </div>
 
     </div>
@@ -1031,85 +1006,114 @@
 
   <!-- RIGHT: 图片区 -->
   <div class="col" id="colRight">
-    <div class="col-header">每日图片</div>
-    <div class="right-body">
-      <div class="img-upload-area" id="imgUploadArea">
-        <div class="upload-icon">📷</div>
-        <div class="upload-hint">点击或拖拽上传<br>今日饮食图片</div>
-      </div>
-      <div class="img-actions">
-        <label class="btn btn-ghost btn-sm" style="flex:1;text-align:center;cursor:pointer">
-          📸 上传图片
-          <input type="file" id="imgInput" accept="image/*" style="display:none">
-        </label>
-        <button class="btn btn-danger btn-sm" id="clearImgBtn">删除</button>
-      </div>
-      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);flex-shrink:0">
-        <div style="font-weight:600;color:var(--text);margin-bottom:6px">📝 备注</div>
-        <textarea id="noteInput"
-          placeholder="今日饮食备注、心情或感受…"
-          style="width:100%;background:transparent;border:none;color:var(--text);font-size:12px;resize:none;outline:none;min-height:60px;font-family:inherit;line-height:1.6"
-        ></textarea>
+    <div class="col-header">添加食物</div>
+    <div class="left-body">
+
+      <!-- Mode toggle -->
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modeManual">⌨️ 手动输入</button>
+        <button class="mode-btn" id="modeVoice">🎙 语音输入</button>
       </div>
 
-      <!-- Gallery -->
-      <div class="gallery-section">
-        <div class="gallery-header">
-          <span class="gallery-title">每日一图展示柜</span>
-          <div class="gallery-month-nav">
-            <button id="galPrevMonth">‹</button>
-            <span class="gallery-month-label" id="galMonthLabel"></span>
-            <button id="galNextMonth">›</button>
+      <!-- MANUAL PANEL -->
+      <div class="manual-panel" id="manualPanel">
+        <!-- Search -->
+        <div class="search-wrap">
+          <span class="icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="搜索食物名称…" autocomplete="off">
+        </div>
+        <div id="suggestions"></div>
+
+        <!-- Selected food preview -->
+        <div class="food-preview" id="foodPreview">
+          <div class="fp-name" id="fpName">—</div>
+          <div class="food-preview-grid">
+            <div class="fp-item"><span>热量</span><span class="fp-val" id="fpCal">—</span></div>
+            <div class="fp-item"><span>蛋白质</span><span class="fp-val" id="fpPro">—</span></div>
+            <div class="fp-item"><span>脂肪</span><span class="fp-val" id="fpFat">—</span></div>
+            <div class="fp-item"><span>碳水</span><span class="fp-val" id="fpCarb">—</span></div>
+          </div>
+          <div class="fp-item"><span>每100g参考成本</span><span class="fp-val" id="fpCost">—</span></div>
+        </div>
+
+        <!-- Grams & cost -->
+        <div class="input-row">
+          <div class="input-group">
+            <label>克数 (g)</label>
+            <input type="number" id="gramsInput" placeholder="100" min="1" max="9999">
+          </div>
+          <div class="input-group">
+            <label>实际成本 (元, 可选)</label>
+            <input type="number" id="costInput" placeholder="自动计算" step="0.01" min="0">
           </div>
         </div>
-        <div class="cal-dow-row">
-          <div class="cal-dow">日</div><div class="cal-dow">一</div><div class="cal-dow">二</div>
-          <div class="cal-dow">三</div><div class="cal-dow">四</div><div class="cal-dow">五</div><div class="cal-dow">六</div>
-        </div>
-        <div class="cal-grid" id="calGrid"></div>
-        <button class="gallery-export-btn" id="exportPosterBtn">✨ 导出本月海报</button>
+
+        <button class="btn btn-primary" id="addBtn">＋ 添加到今日记录</button>
       </div>
 
-      <!-- Data Management -->
-      <div class="gallery-section" style="margin-top:4px">
-        <div class="gallery-header" style="margin-bottom:8px">
-          <span class="gallery-title">📦 数据管理</span>
+      <!-- VOICE PANEL -->
+      <div class="voice-panel" id="voicePanel" style="display:none">
+        <button class="record-btn" id="recordBtn" title="按住录音">🎙</button>
+        <div class="waveform" id="waveform">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-            <button class="btn btn-ghost btn-sm" id="exportCsvBtn" style="text-align:center">⬇️ 导出 CSV</button>
-            <button class="btn btn-ghost btn-sm" id="importCsvBtn" style="text-align:center">⬆️ 导入 CSV</button>
-          </div>
-          <input type="file" id="importCsvInput" accept=".csv" style="display:none">
-          <button class="btn btn-sm" id="clearDataBtn" style="background:rgba(247,106,106,0.12);color:var(--red);border:1px solid rgba(247,106,106,0.3)">🗑 清除数据…</button>
-        </div>
+        <div class="record-label" id="recordLabel">点击开始录音</div>
+        <textarea class="voice-transcript placeholder" id="voiceTranscript" rows="3" style="resize:vertical;width:100%;box-sizing:border-box">识别结果将显示在这里…</textarea>
+        <button class="btn btn-ghost btn-sm" id="voiceParseBtn" style="display:none;margin-top:4px">🔍 解析热量</button>
+        <div class="voice-parsed" id="voiceParsed"></div>
+        <button class="btn btn-primary" id="voiceAddBtn" style="display:none">✅ 批量添加到今日记录</button>
       </div>
 
-      <!-- Chart -->
-      <div class="gallery-section" style="margin-top:4px" id="chartSection">
-        <div class="gallery-header" style="margin-bottom:8px">
-          <span class="gallery-title">📈 趋势图表</span>
-          <button class="btn btn-ghost btn-sm" id="chartToggle">展开</button>
+      <hr class="divider">
+
+      <!-- Custom food -->
+      <button class="custom-toggle" id="customToggle">
+        <span>＋</span> 添加自定义食物
+      </button>
+      <!-- Loss ratio calculator -->
+      <button class="custom-toggle" id="lossCalcToggle" style="margin-top:4px;color:var(--yellow)">
+        <span>⚖️</span> 损耗比例计算
+      </button>
+      <div id="lossDraftList"></div>
+      <div id="customForm">
+        <div class="input-group">
+          <label>食物名称 *</label>
+          <input type="text" id="cfName" placeholder="例：自制燕麦饼">
         </div>
-        <div id="chartPanel" style="display:none">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-            <select id="chartRange" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:11px;outline:none;cursor:pointer">
-              <option value="7">近 7 天</option>
-              <option value="14">近 14 天</option>
-              <option value="30" selected>近 30 天</option>
-              <option value="90">近 3 月</option>
-              <option value="0">全部</option>
-            </select>
+        <div class="custom-grid">
+          <div class="input-group">
+            <label>热量 (kcal/100g) *</label>
+            <input type="number" id="cfCal" placeholder="0" min="0">
           </div>
-          <canvas id="trendChart" style="width:100%;border-radius:8px;display:block"></canvas>
-          <div style="display:flex;gap:12px;justify-content:center;margin-top:6px;font-size:10px;color:var(--text2)">
-            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent);display:inline-block;border-radius:2px"></span>热量 kcal</span>
-            <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:3px;background:var(--accent3);display:inline-block;border-radius:2px"></span>成本 元</span>
+          <div class="input-group">
+            <label>蛋白质 (g/100g)</label>
+            <input type="number" id="cfPro" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>脂肪 (g/100g)</label>
+            <input type="number" id="cfFat" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>碳水 (g/100g)</label>
+            <input type="number" id="cfCarb" placeholder="0" min="0" step="0.1">
+          </div>
+          <div class="input-group">
+            <label>成本 (元/100g)</label>
+            <input type="number" id="cfCost" placeholder="0" min="0" step="0.01">
           </div>
         </div>
+        <button class="btn btn-primary" id="saveCustomBtn">保存自定义食物</button>
       </div>
 
-</div>
+    </div>
+  </div>
 
 <div id="toast"></div>
 
@@ -1815,7 +1819,7 @@ function commitBatch() {
   voiceItems = [];
   renderVoiceParsed();
   const el = document.getElementById('voiceTranscript');
-  el.textContent = '识别结果将显示在这里…';
+  el.value = '识别结果将显示在这里…';
   el.classList.add('placeholder');
 }
 
@@ -1849,10 +1853,10 @@ function initRecognition() {
   r.onresult = e => {
     const transcript = [...e.results].map(r => r[0].transcript).join('');
     const el = document.getElementById('voiceTranscript');
-    el.textContent = transcript;
+    el.value = transcript;
     el.classList.remove('placeholder');
     if (e.results[e.results.length - 1].isFinal) {
-      parseVoiceTranscript(transcript);
+      document.getElementById('voiceParseBtn').style.display = '';
     }
   };
 
@@ -1891,8 +1895,9 @@ function startRecording() {
   if (!recognition) return;
   voiceItems = [];
   renderVoiceParsed();
+  document.getElementById('voiceParseBtn').style.display = 'none';
   const el = document.getElementById('voiceTranscript');
-  el.textContent = '识别结果将显示在这里…';
+  el.value = '识别结果将显示在这里…';
   el.classList.add('placeholder');
   setRecordingState(true);
   recognition.start();
@@ -2001,6 +2006,13 @@ function removeVoiceItem(idx) {
 // ── Batch add with modal queue ────────────────────────────────
 let batchQueue   = [];   // items needing quick-add modal
 let batchReady   = [];   // fully resolved entries ready to commit
+
+document.getElementById('voiceParseBtn').addEventListener('click', () => {
+  const text = document.getElementById('voiceTranscript').value.trim();
+  if (!text || text === '识别结果将显示在这里…') return;
+  document.getElementById('voiceParseBtn').style.display = 'none';
+  parseVoiceTranscript(text);
+});
 
 document.getElementById('voiceAddBtn').addEventListener('click', () => {
   if (!voiceItems.length) return;
@@ -2695,7 +2707,7 @@ document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('mobile-active', i === idx);
     });
-    if (idx === 2) { setTimeout(renderChart, 80); loadDateImage(); }
+    if (idx === 0) { setTimeout(renderChart, 80); loadDateImage(); }
   });
 });
 
