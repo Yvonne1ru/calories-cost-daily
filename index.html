@@ -1348,7 +1348,18 @@ function getImage(date) {
 function saveImage(date, b64) {
   const all = JSON.parse(localStorage.getItem(STORAGE_IMAGES) || '{}');
   if (b64) all[date] = b64; else delete all[date];
-  localStorage.setItem(STORAGE_IMAGES, JSON.stringify(all));
+  // Retry with oldest-first eviction if storage is full
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      localStorage.setItem(STORAGE_IMAGES, JSON.stringify(all));
+      return;
+    } catch (e) {
+      const dates = Object.keys(all).sort();
+      if (!dates.length) { toast('存储空间不足，图片无法保存'); return; }
+      delete all[dates[0]];
+    }
+  }
+  toast('存储空间不足，图片无法保存');
 }
 function getNote(date) {
   const all = JSON.parse(localStorage.getItem(STORAGE_NOTES) || '{}');
