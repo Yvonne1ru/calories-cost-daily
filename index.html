@@ -1735,6 +1735,7 @@ function openQuickModal(name) {
 
 function closeQuickModal() {
   quickModal.classList.remove('show');
+  qmVoiceIdx = -1;
   if (qmBatchMode) {
     // user cancelled mid-batch — commit whatever is ready so far
     qmBatchMode = false;
@@ -1790,7 +1791,15 @@ document.getElementById('qmConfirm').addEventListener('click', () => {
 
   closeQuickModal();
 
-  if (qmBatchMode) {
+  if (qmVoiceIdx >= 0 && voiceItems[qmVoiceIdx]) {
+    // 语音手动输入模式：将结果写回 voiceItem，不直接提交
+    voiceItems[qmVoiceIdx].grams        = grams;
+    voiceItems[qmVoiceIdx].selectedFood = { name: qmPendingName, cal: num(cal), pro: isNaN(pro)?0:num(pro), fat: isNaN(fat)?0:num(fat), carb: isNaN(carb)?0:num(carb), cost: isNaN(cost)?0:num(cost,2) };
+    voiceItems[qmVoiceIdx].manualMode   = false;
+    qmVoiceIdx = -1;
+    closeQuickModal();
+    renderVoiceParsed();
+  } else if (qmBatchMode) {
     // accumulate and continue queue
     batchReady.push(entry);
     batchQueue.shift();
@@ -1906,21 +1915,24 @@ function stopRecording() {
 
 // ── Parse transcript ──────────────────────────────────────────
 function parseVoiceTranscript(text) {
-  // normalize: "两百" etc not handled — rely on speech-to-text giving digits
-  // strip commas/periods/spaces between items, support both 克 and g/G
-  const re = /([^\d，,。\s]+?)\s*(\d+(?:\.\d+)?)\s*(?:克|g|G)/g;
   const found = [];
+
+  // 先匹配 食物名+克数 格式
+  const reWithGrams = /([^\d，,。\s]+?)\s*(\d+(?:\.\d+)?)\s*(?:克|g|G)/g;
   let m;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = reWithGrams.exec(text)) !== null) {
     const name  = m[1].trim().replace(/^[，,。\s]+|[，,。\s]+$/g, '');
     const grams = parseFloat(m[2]);
     if (name && grams > 0) found.push({ name, grams });
   }
+
+  // 若完全没匹配到克数格式，则把整段文字按逗号/顿号/空格切分当食物名，克数默认100
   if (!found.length) {
-    toast('未能解析出食物和克数，请重新录音');
-    return;
+    const parts = text.split(/[，,、\s]+/).map(s => s.trim()).filter(s => s && !/^\d+$/.test(s));
+    if (!parts.length) { toast('未能解析出食物名称，请重新输入'); return; }
+    parts.forEach(name => found.push({ name, grams: 100 }));
   }
-  // attach fuzzy matches and selection state to each item
+
   voiceItems = found.map(item => {
     const exact = allFoods.find(f => f.name === item.name) || null;
     const fuzzy = exact ? [] : allFoods.filter(f =>
@@ -1988,6 +2000,11 @@ function renderVoiceParsed() {
       voiceItems[i].manualMode   = true;
       voiceItems[i].selectedFood = null;
       renderVoiceParsed();
+      // 立即弹出 quickModal，记录目标 voiceItem 索引
+      qmBatchMode = false;
+      qmVoiceIdx  = i;
+      openQuickModal(voiceItems[i].name);
+      document.getElementById('qmGrams').value = voiceItems[i].grams;
     });
   });
 
@@ -2051,6 +2068,7 @@ function processBatchQueue() {
 
 // flag so qmConfirm knows to continue the queue
 let qmBatchMode = false;
+let qmVoiceIdx  = -1;  // index into voiceItems when opened from manual-btn
 
 // ── Quick-add modal ───────────────────────────────────────────
 document.getElementById('customToggle').addEventListener('click', () => {
